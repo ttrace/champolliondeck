@@ -30,7 +30,7 @@ struct StubFoundationModelsTranslationEngine: TranslationEngine {
             SegmentOutput(
                 segmentIndex: segment.index,
                 sourceText: segment.text,
-                translatedText: "[FM: \\(input.targetLanguage)] \\(segment.text)"
+                translatedText: "[FM: \(input.targetLanguage)] \(segment.text)"
             )
         }
     }
@@ -48,7 +48,7 @@ struct StubCoreMLTranslationEngine: TranslationEngine {
             SegmentOutput(
                 segmentIndex: segment.index,
                 sourceText: segment.text,
-                translatedText: "[CoreML: \\(input.targetLanguage)] \\(segment.text)"
+                translatedText: "[CoreML: \(input.targetLanguage)] \(segment.text)"
             )
         }
     }
