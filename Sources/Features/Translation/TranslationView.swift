@@ -5,97 +5,181 @@ import AppKit
 
 struct TranslationView: View {
     @StateObject private var viewModel: TranslationViewModel
+    @AppStorage("developerModeEnabled") private var developerModeEnabled: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
 
     init(viewModel: TranslationViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.95, green: 0.91, blue: 0.82).opacity(0.9),
+                    Color(red: 0.93, green: 0.90, blue: 0.88).opacity(0.9)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("LOCAL LLM TRANSLATOR")
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .kerning(3)
+                            .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
+                        Text("Champollion Deck")
+                            .font(.system(size: 62, weight: .black, design: .serif))
+                            .minimumScaleFactor(0.8)
+                    }
+                    Spacer()
+                    Menu {
+                        Toggle("Developer Mode", isOn: $developerModeEnabled)
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(Color(red: 0.35, green: 0.42, blue: 0.34))
+                            .frame(width: 64, height: 64)
+                            .background(.white.opacity(0.85), in: Circle())
+                    }
+                    .menuStyle(.borderlessButton)
+                }
+
+                HStack(alignment: .top, spacing: 18) {
+                    sourceCard
+                    outputCard
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+                if developerModeEnabled {
+                    GroupBox("Glossary (source=target)") {
+                        TextEditor(text: $viewModel.glossaryText)
+                            .frame(minHeight: 80)
+                    }
+
+                    GroupBox("Analysis") {
+                        Text(analysisText)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .padding(36)
+            .foregroundStyle(colorScheme == .dark ? .white : .primary)
+        }
+        .frame(minWidth: 1000, minHeight: 680)
+    }
+
+    private var sourceCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Source")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
                 Spacer()
+                Button("Paste", action: pasteInputFromClipboard)
+                    .buttonStyle(.bordered)
+                Button("Clear") {
+                    viewModel.inputText = ""
+                }
+                .buttonStyle(.bordered)
+            }
+
+            TextEditor(text: $viewModel.inputText)
+                .frame(minHeight: 300)
+                .padding(8)
+                .background(
+                    colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.4),
+                    in: RoundedRectangle(cornerRadius: 18)
+                )
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            colorScheme == .dark ? Color.black.opacity(0.5) : Color.white.opacity(0.7),
+            in: RoundedRectangle(cornerRadius: 26)
+        )
+    }
+
+    private var outputCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Stream Output")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                Spacer()
+
                 Button {
                     copyOutputToClipboard()
                 } label: {
                     Image(systemName: "doc.on.doc")
+                        .font(.system(size: 16, weight: .semibold))
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.bordered)
                 .help("Copy output")
                 .disabled(viewModel.translatedText.isEmpty)
-            }
 
-            HStack(spacing: 12) {
-                if viewModel.targetLanguageOptions.isEmpty {
-                    Text("No Apple Intelligence target languages available")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Picker("Target", selection: $viewModel.targetLanguage) {
-                        ForEach(viewModel.targetLanguageOptions) { option in
-                            Text(option.displayLabel).tag(option.code)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                }
                 Button("Translate") {
                     Task { await viewModel.translate() }
                 }
+                .buttonStyle(.borderedProminent)
                 .disabled(viewModel.isTranslating || viewModel.targetLanguageOptions.isEmpty)
             }
 
-            HStack(spacing: 12) {
-                Text("Experiment")
-                Picker("Experiment", selection: $viewModel.experimentMode) {
-                    ForEach(TranslationExperimentMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
+            if viewModel.targetLanguageOptions.isEmpty {
+                Text("No target languages")
+                    .foregroundStyle(.secondary)
+            } else {
+                Picker("Target", selection: $viewModel.targetLanguage) {
+                    ForEach(viewModel.targetLanguageOptions) { option in
+                        Text(option.displayLabel).tag(option.code)
                     }
                 }
                 .pickerStyle(.menu)
-                Spacer()
             }
 
-            GroupBox("Input") {
-                TextEditor(text: $viewModel.inputText)
-                    .frame(minHeight: 120)
+            ScrollView {
+                Text(viewModel.translatedText.isEmpty ? "(empty)" : viewModel.translatedText)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
             }
-
-            GroupBox("Glossary (source=target)") {
-                TextEditor(text: $viewModel.glossaryText)
-                    .frame(minHeight: 60)
-            }
-
-            GroupBox("Output") {
-                ScrollView {
-                    Text(viewModel.translatedText.isEmpty ? "(empty)" : viewModel.translatedText)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(minHeight: 80)
-            }
-
-            GroupBox("Analysis") {
-                Text(
-                    [
-                        "Engine: \(viewModel.engineName.isEmpty ? "(none)" : viewModel.engineName)",
-                        "Mode: \(viewModel.experimentMode.displayName)",
-                        "Detected language: \(viewModel.detectedLanguageCode.isEmpty ? "(none)" : viewModel.detectedLanguageCode)",
-                        "AI language support: \(viewModel.aiLanguageSupported ? "yes" : "no")",
-                        "Protected tokens: \(viewModel.protectedTokens.count)",
-                        "Glossary matches: \(viewModel.glossaryMatches.count)",
-                        "Ambiguity hints: \(viewModel.ambiguityHints.count)",
-                        "Trace steps: \(viewModel.traces.count)"
-                    ].joined(separator: "\n")
-                )
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            .frame(minHeight: 300)
+            .background(
+                colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.4),
+                in: RoundedRectangle(cornerRadius: 18)
+            )
 
             if let error = viewModel.errorMessage {
                 Text(error)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundStyle(.red)
+            } else {
+                Text("Completed.")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
             }
         }
-        .padding()
-        .frame(minWidth: 760, minHeight: 560)
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            colorScheme == .dark ? Color.black.opacity(0.5) : Color.white.opacity(0.7),
+            in: RoundedRectangle(cornerRadius: 26)
+        )
+    }
+
+    private var analysisText: String {
+        [
+            "Engine: \(viewModel.engineName.isEmpty ? "(none)" : viewModel.engineName)",
+            "Mode: \(viewModel.experimentMode.displayName)",
+            "Detected language: \(viewModel.detectedLanguageCode.isEmpty ? "(none)" : viewModel.detectedLanguageCode)",
+            "AI language support: \(viewModel.aiLanguageSupported ? "yes" : "no")",
+            "Protected tokens: \(viewModel.protectedTokens.count)",
+            "Glossary matches: \(viewModel.glossaryMatches.count)",
+            "Ambiguity hints: \(viewModel.ambiguityHints.count)",
+            "Trace steps: \(viewModel.traces.count)"
+        ].joined(separator: "\n")
     }
 
     private func copyOutputToClipboard() {
@@ -103,6 +187,15 @@ struct TranslationView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(viewModel.translatedText, forType: .string)
+#endif
+    }
+
+    private func pasteInputFromClipboard() {
+#if os(macOS)
+        let pasteboard = NSPasteboard.general
+        if let text = pasteboard.string(forType: .string), !text.isEmpty {
+            viewModel.inputText = text
+        }
 #endif
     }
 }
