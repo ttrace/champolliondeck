@@ -1,23 +1,29 @@
 import SwiftUI
+
 #if os(macOS)
-import AppKit
+    import AppKit
 #endif
 
 struct TranslationView: View {
+    // #region MARK: MARK:State
     @StateObject private var viewModel: TranslationViewModel
     @AppStorage("developerModeEnabled") private var developerModeEnabled: Bool = false
     @Environment(\.colorScheme) private var colorScheme
+    // #endregion
 
+    // #region MARK: Init
     init(viewModel: TranslationViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
+    // #endregion
 
+    // #region MARK: Body
     var body: some View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.95, green: 0.91, blue: 0.82).opacity(0.9),
-                    Color(red: 0.93, green: 0.90, blue: 0.88).opacity(0.9)
+                    Color(red: 0.98, green: 0.92, blue: 0.82).opacity(0.9),
+                    Color(red: 0.93, green: 0.90, blue: 0.88).opacity(0.9),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -26,16 +32,27 @@ struct TranslationView: View {
 
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .bottom) {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .trailing, spacing: -6) {
+                        Text("Pre-Babel Lens")
+                            .font(.system(size: 32, weight: .black, design: .serif))
+                            .minimumScaleFactor(0.8)
                         Text("LOCAL LLM TRANSLATOR")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
                             .kerning(3)
                             .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
-                        Text("Champollion Deck")
-                            .font(.system(size: 62, weight: .black, design: .serif))
-                            .minimumScaleFactor(0.8)
                     }
                     Spacer()
+                    if viewModel.targetLanguageOptions.isEmpty {
+                        Text("No target languages")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Picker("Target", selection: $viewModel.targetLanguage) {
+                            ForEach(viewModel.targetLanguageOptions) { option in
+                                Text(option.menuLabel(showCode: developerModeEnabled)).tag(option.code)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
                     Menu {
                         Toggle("Developer Mode", isOn: $developerModeEnabled)
                     } label: {
@@ -47,6 +64,7 @@ struct TranslationView: View {
                     }
                     .menuStyle(.borderlessButton)
                 }
+                .padding(.top, 8)
 
                 HStack(alignment: .top, spacing: 18) {
                     sourceCard
@@ -55,6 +73,15 @@ struct TranslationView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
                 if developerModeEnabled {
+                    GroupBox("Process Mode") {
+                        Picker("Experiment", selection: $viewModel.experimentMode) {
+                            ForEach(TranslationExperimentMode.allCases) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+
                     GroupBox("Glossary (source=target)") {
                         TextEditor(text: $viewModel.glossaryText)
                             .frame(minHeight: 80)
@@ -71,13 +98,23 @@ struct TranslationView: View {
             .foregroundStyle(colorScheme == .dark ? .white : .primary)
         }
         .frame(minWidth: 1000, minHeight: 680)
+        .task {
+            #if os(macOS)
+                if viewModel.consumeLaunchActivationRequest() {
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            #endif
+            await viewModel.translateIfNeededOnLaunch()
+        }
     }
+    // #endregion
 
+    // #region MARK: Subviews
     private var sourceCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Source")
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
                 Spacer()
                 Button("Paste", action: pasteInputFromClipboard)
                     .buttonStyle(.bordered)
@@ -88,8 +125,10 @@ struct TranslationView: View {
             }
 
             TextEditor(text: $viewModel.inputText)
+                .scrollContentBackground(.hidden)
                 .frame(minHeight: 300)
                 .padding(8)
+                .font(.body)
                 .background(
                     colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.4),
                     in: RoundedRectangle(cornerRadius: 18)
@@ -106,8 +145,8 @@ struct TranslationView: View {
     private var outputCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Stream Output")
-                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                Text("Output")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
                 Spacer()
 
                 Button {
@@ -127,18 +166,6 @@ struct TranslationView: View {
                 .disabled(viewModel.isTranslating || viewModel.targetLanguageOptions.isEmpty)
             }
 
-            if viewModel.targetLanguageOptions.isEmpty {
-                Text("No target languages")
-                    .foregroundStyle(.secondary)
-            } else {
-                Picker("Target", selection: $viewModel.targetLanguage) {
-                    ForEach(viewModel.targetLanguageOptions) { option in
-                        Text(option.displayLabel).tag(option.code)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-
             ScrollView {
                 Text(viewModel.translatedText.isEmpty ? "(empty)" : viewModel.translatedText)
                     .textSelection(.enabled)
@@ -153,7 +180,7 @@ struct TranslationView: View {
 
             if let error = viewModel.errorMessage {
                 Text(error)
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .font(.body)
                     .foregroundStyle(.red)
             } else {
                 Text("Completed.")
@@ -168,7 +195,9 @@ struct TranslationView: View {
             in: RoundedRectangle(cornerRadius: 26)
         )
     }
+    // #endregion
 
+    // #region MARK: Derived Text
     private var analysisText: String {
         [
             "Engine: \(viewModel.engineName.isEmpty ? "(none)" : viewModel.engineName)",
@@ -178,24 +207,27 @@ struct TranslationView: View {
             "Protected tokens: \(viewModel.protectedTokens.count)",
             "Glossary matches: \(viewModel.glossaryMatches.count)",
             "Ambiguity hints: \(viewModel.ambiguityHints.count)",
-            "Trace steps: \(viewModel.traces.count)"
+            "Trace steps: \(viewModel.traces.count)",
         ].joined(separator: "\n")
     }
+    // #endregion
 
+    // #region MARK: Clipboard Actions
     private func copyOutputToClipboard() {
-#if os(macOS)
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(viewModel.translatedText, forType: .string)
-#endif
+        #if os(macOS)
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(viewModel.translatedText, forType: .string)
+        #endif
     }
 
     private func pasteInputFromClipboard() {
-#if os(macOS)
-        let pasteboard = NSPasteboard.general
-        if let text = pasteboard.string(forType: .string), !text.isEmpty {
-            viewModel.inputText = text
-        }
-#endif
+        #if os(macOS)
+            let pasteboard = NSPasteboard.general
+            if let text = pasteboard.string(forType: .string), !text.isEmpty {
+                viewModel.inputText = text
+            }
+        #endif
     }
+    // #endregion
 }

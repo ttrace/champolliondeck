@@ -1,6 +1,13 @@
-# Champollion Deck
+# Pre-Babel Lens
 
-Champollion Deck is a local translation app prototype for Apple platforms.
+Pre-Babel Lenz is a local translation application using Apple's In Device Foundation Models. Translation using LLM is possible even in places without an internet connection. Additionally, since the translated text is not sent to an external server, it can be used safely when dealing with privacy or confidential information.
+* Please enable Apple Intelligence.
+
+If you set up the Automator workflow as described in the README, you can translate text selected in Mac applications. You can also translate from shortcuts set in the workflow.
+
+Repository: https://github.com/ttrace/pre-babel-lens
+
+![Pre-Babel Lens Screenshot](docs/images/screenshot.png)
 
 Current focus:
 - macOS-first implementation with Swift + SwiftUI
@@ -28,6 +35,56 @@ swift build
 ```bash
 swift test
 ```
+
+## Automator Integration (macOS)
+
+You can launch translation from selected text via Automator.
+
+1. Open Automator and create a new `Quick Action`.
+2. Set:
+   - `Workflow receives current`: `text`
+   - `in`: `any application`
+3. Add `Run Shell Script`.
+4. Set:
+   - `Shell`: `/bin/zsh`
+   - `Pass input`: `to stdin`
+5. Paste this script:
+
+```bash
+#!/bin/zsh
+
+text="$(cat)"
+if [ -z "$text" ]; then
+  text="$*"
+fi
+
+if [ -z "$text" ]; then
+  exit 0
+fi
+
+encoded="$(printf '%s' "$text" | /usr/bin/python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.stdin.read()))')"
+open "prebabellens://translate?text=${encoded}"
+```
+
+6. Save (for example: `Translate with Pre-Babel Lens`).
+7. Assign a keyboard shortcut from `System Settings > Keyboard > Keyboard Shortcuts > Services`.
+
+Notes:
+- The app keeps your current target language and updates the existing window content.
+- If Automator sends the same `text + target language` again, duplicate translation is skipped.
+
+## Analysis Parameters
+
+The Translation screen can show the following analysis values:
+
+- `Engine`: Translation engine name currently used. `(none)` means no translation has run yet.
+- `Mode`: Active preprocessing experiment mode.
+- `Detected language`: Language code detected from input text before translation.
+- `AI language support`: Whether detected language is supported by Apple Intelligence.
+- `Protected tokens`: Count of extracted protected items (URLs, code snippets, numbers, etc.).
+- `Glossary matches`: Count of glossary hits found in input text.
+- `Ambiguity hints`: Count of ambiguity warnings detected in preprocessing.
+- `Trace steps`: Number of preprocessing trace entries recorded for the request.
 
 ## License
 

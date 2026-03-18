@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 final class TranslationViewModel: ObservableObject {
     @Published var targetLanguage: String
-    @Published var experimentMode: TranslationExperimentMode = .segmentedGlossaryProtected
+    @Published var experimentMode: TranslationExperimentMode = .rawInput
     @Published var inputText: String = ""
     @Published var glossaryText: String = ""
 
@@ -20,8 +20,12 @@ final class TranslationViewModel: ObservableObject {
 
     let targetLanguageOptions: [TargetLanguageOption]
     private let orchestrator: TranslationOrchestrator
+    private var shouldTranslateOnLaunch: Bool = false
+    private var shouldActivateAppOnLaunch: Bool = false
+    private var partialTranslationsBySegment: [Int: String] = [:]
+    private var lastHandledIncomingURLKey: String?
 
-    init(orchestrator: TranslationOrchestrator) {
+    init(orchestrator: TranslationOrchestrator, launchInputText: String? = nil) {
         let options = AppleIntelligenceLanguageCatalog.supportedLanguageOptions()
         self.targetLanguageOptions = options
         if options.contains(where: { $0.code == "ja" }) {
@@ -30,6 +34,39 @@ final class TranslationViewModel: ObservableObject {
             self.targetLanguage = options.first?.code ?? "en"
         }
         self.orchestrator = orchestrator
+
+        if let launchInputText {
+            let trimmed = launchInputText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                self.inputText = trimmed
+                self.shouldTranslateOnLaunch = true
+                self.shouldActivateAppOnLaunch = true
+            }
+        }
+    }
+
+    func consumeLaunchActivationRequest() -> Bool {
+        let shouldActivate = shouldActivateAppOnLaunch
+        shouldActivateAppOnLaunch = false
+        return shouldActivate
+    }
+
+    func translateIfNeededOnLaunch() async {
+        guard shouldTranslateOnLaunch else { return }
+        shouldTranslateOnLaunch = false
+        await translate()
+    }
+
+    func handleIncomingURL(_ url: URL) async {
+        guard let text = URLLaunchParser.extractText(from: url) else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let deduplicationKey = "\(targetLanguage)\u{1F}\(trimmed)"
+        guard lastHandledIncomingURLKey != deduplicationKey else { return }
+
+        lastHandledIncomingURLKey = deduplicationKey
+        inputText = trimmed
+        await translate()
     }
 
     func translate() async {
@@ -54,11 +91,34 @@ final class TranslationViewModel: ObservableObject {
             return
         }
 
+        translatedText = ""
+        traces = []
+        protectedTokens = []
+        glossaryMatches = []
+        ambiguityHints = []
+        engineName = ""
+        detectedLanguageCode = ""
+        aiLanguageSupported = true
+        errorMessage = nil
+        partialTranslationsBySegment = [:]
+
         isTranslating = true
         defer { isTranslating = false }
 
         do {
-            let output = try await orchestrator.translate(request)
+            let output = try await orchestrator.translate(
+                request,
+                onPartialSegmentResult: { [weak self] segmentIndex, partialText in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.partialTranslationsBySegment[segmentIndex] = partialText
+                        self.translatedText = self.partialTranslationsBySegment
+                            .sorted(by: { $0.key < $1.key })
+                            .map(\.value)
+                            .joined(separator: " ")
+                    }
+                }
+            )
             translatedText = output.translatedText
             traces = output.analysis.traces
             protectedTokens = output.analysis.input.protectedTokens
@@ -87,5 +147,20 @@ final class TranslationViewModel: ObservableObject {
                 guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
                 return GlossaryEntry(source: parts[0], target: parts[1])
             }
+    }
+}
+
+private enum URLLaunchParser {
+    static func extractText(from url: URL) -> String? {
+        guard let scheme = url.scheme?.lowercased(), scheme == "prebabellens" else { return nil }
+
+        if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let textItem = components.queryItems?.first(where: { $0.name == "text" }),
+           let value = textItem.value {
+            return value
+        }
+
+        let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return path.isEmpty ? nil : path.removingPercentEncoding ?? path
     }
 }
