@@ -60,4 +60,24 @@ struct AppleIntelligencePreprocessEngineTests {
         #expect(result.input.isDetectedLanguageSupportedByAppleIntelligence == true)
         #expect(result.traces.contains(where: { $0.step == "ai-heuristic-language-merge" }))
     }
+
+    @Test
+    func heuristicLanguageDetectionForUnsafeCandidateParagraphStillDetectsEnglish() {
+        let text = """
+        Corporate Media “Happily Manufacturing Consent” for Iran War- So What Are You Going to Do About It?
+        Watch Mehdi’s video calling out mainstream media – and reminding you why being a part of Zeteo is so important.
+        """
+
+        let request = TranslationRequest(
+            sourceLanguage: "und",
+            targetLanguage: "ja",
+            text: text,
+            glossary: []
+        )
+
+        let result = AppleIntelligencePreprocessEngine().analyze(request)
+
+        #expect(result.input.detectedLanguageCode == "en")
+        #expect(result.input.isDetectedLanguageSupportedByAppleIntelligence == true)
+    }
 }
