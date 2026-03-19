@@ -6,11 +6,12 @@ final class TranslationViewModel: ObservableObject {
         case ready
         case preprocessing(mode: TranslationExperimentMode)
         case translating(current: Int, total: Int)
+        case stopped
         case completed
     }
 
     @Published var targetLanguage: String
-    @Published var experimentMode: TranslationExperimentMode = .rawInput
+    @Published var experimentMode: TranslationExperimentMode = .segmented
     @Published var inputText: String = ""
     @Published var glossaryText: String = ""
 
@@ -34,6 +35,8 @@ final class TranslationViewModel: ObservableObject {
     private var partialTranslationsBySegment: [Int: String] = [:]
     private var partialJoinersAfter: [String] = []
     private var lastHandledIncomingURLKey: String?
+    private var activeTranslationTask: Task<Void, Never>?
+    private var activeTranslationToken: UUID?
 
     init(orchestrator: TranslationOrchestrator, launchInputText: String? = nil) {
         let options = AppleIntelligenceLanguageCatalog.supportedLanguageOptions()
@@ -71,16 +74,47 @@ final class TranslationViewModel: ObservableObject {
         guard let text = URLLaunchParser.extractText(from: url) else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let deduplicationKey = "\(targetLanguage)\u{1F}\(trimmed)"
+        let deduplicationKey = "\(targetLanguage)\u{1F}\(experimentMode.rawValue)\u{1F}\(trimmed)"
         guard lastHandledIncomingURLKey != deduplicationKey else { return }
 
         lastHandledIncomingURLKey = deduplicationKey
         inputText = trimmed
-        appendDeveloperLog("Incoming URL accepted. chars=\(trimmed.count), target=\(targetLanguage)")
+        appendDeveloperLog(
+            "Incoming URL accepted. chars=\(trimmed.count), target=\(targetLanguage), mode=\(experimentMode.rawValue)"
+        )
         await translate()
     }
 
     func translate() async {
+        await runManagedTranslation()
+    }
+
+    func stopTranslation() {
+        activeTranslationTask?.cancel()
+        activeTranslationTask = nil
+        activeTranslationToken = nil
+        isTranslating = false
+        status = .stopped
+        appendDeveloperLog("Translation stopped by user.")
+    }
+
+    private func runManagedTranslation() async {
+        activeTranslationTask?.cancel()
+        let token = UUID()
+        activeTranslationToken = token
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performTranslation()
+        }
+        activeTranslationTask = task
+        await task.value
+        if activeTranslationToken == token {
+            activeTranslationTask = nil
+            activeTranslationToken = nil
+        }
+    }
+
+    private func performTranslation() async {
         let request = TranslationRequest(
             sourceLanguage: "und",
             targetLanguage: targetLanguage,
@@ -143,8 +177,12 @@ final class TranslationViewModel: ObservableObject {
             detectedLanguageCode = output.analysis.input.detectedLanguageCode ?? ""
             aiLanguageSupported = output.analysis.input.isDetectedLanguageSupportedByAppleIntelligence
             errorMessage = nil
+            appendHeuristicSegmentationLogs(from: output.analysis.traces)
             status = .completed
             appendDeveloperLog("Translation succeeded. segments=\(output.segmentOutputs.count), detected=\(detectedLanguageCode.isEmpty ? "none" : detectedLanguageCode)")
+        } catch is CancellationError {
+            status = .stopped
+            appendDeveloperLog("Translation cancelled.")
         } catch let pipelineError as TranslationPipelineError {
             if let detected = pipelineError.detectedLanguageCode {
                 detectedLanguageCode = detected
@@ -168,6 +206,8 @@ final class TranslationViewModel: ObservableObject {
             return "Preprocessing (\(mode.displayName))"
         case .translating(let current, let total):
             return "Translating \(current)/\(total)"
+        case .stopped:
+            return "Stopped"
         case .completed:
             return "Completed"
         }
@@ -237,6 +277,18 @@ final class TranslationViewModel: ObservableObject {
         developerLogs.append("[\(timestamp)] \(message)")
         if developerLogs.count > 300 {
             developerLogs.removeFirst(developerLogs.count - 300)
+        }
+    }
+
+    private func appendHeuristicSegmentationLogs(from traces: [PreprocessTrace]) {
+        let stepsToReport = Set([
+            "ai-heuristic-context-front-stage",
+            "ai-heuristic-context-back-stage",
+            "ai-heuristic-context-segmentation",
+        ])
+
+        for trace in traces where stepsToReport.contains(trace.step) {
+            appendDeveloperLog("Heuristic \(trace.step): \(trace.summary)")
         }
     }
 }

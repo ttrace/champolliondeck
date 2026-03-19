@@ -3,19 +3,39 @@ import Testing
 
 struct DeterministicPreprocessEngineTests {
     @Test
-    func sentenceSegmentationSplitsOnPunctuation() {
+    func sentenceSegmentationUsesExplicitBoundariesOnly() {
         let request = TranslationRequest(
             sourceLanguage: "en",
             targetLanguage: "ja",
-            text: "Hello world. Next sentence!",
+            text: "This is a first sentence. Still same context.\n\nThis starts a new explicit block.",
             glossary: []
         )
 
         let result = DeterministicPreprocessEngine().analyze(request)
 
         #expect(result.input.segments.count == 2)
-        #expect(result.input.segments[0].text == "Hello world")
-        #expect(result.input.segments[1].text == "Next sentence")
+        #expect(result.input.segments[0].text.contains("Still same context."))
+        #expect(result.input.segments[1].text == "This starts a new explicit block.")
+    }
+
+    @Test
+    func sentenceSegmentationSplitsDialogueLines() {
+        let request = TranslationRequest(
+            sourceLanguage: "en",
+            targetLanguage: "ja",
+            text: """
+            Narrative lead.
+            - Speaker A: Hello.
+            - Speaker B: Hi.
+            """,
+            glossary: []
+        )
+
+        let result = DeterministicPreprocessEngine().analyze(request)
+
+        #expect(result.input.segments.count >= 2)
+        #expect(result.input.segments.contains(where: { $0.text.contains("Speaker A: Hello.") }))
+        #expect(result.input.segments.contains(where: { $0.text.contains("Speaker B: Hi.") }))
     }
 
     @Test
@@ -96,9 +116,8 @@ struct DeterministicPreprocessEngineTests {
 
         let result = DeterministicPreprocessEngine().analyze(request)
 
-        #expect(result.input.segments.count == 2)
-        #expect(result.input.segmentJoinersAfter.count == 2)
-        #expect(result.input.segmentJoinersAfter[0].contains("\n"))
+        #expect(result.input.segments.count == 1)
+        #expect(result.input.segmentJoinersAfter.count == 1)
     }
 
     @Test

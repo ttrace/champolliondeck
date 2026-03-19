@@ -86,11 +86,250 @@ struct CompositePreprocessEngine: PreprocessEngine {
             )
         }
 
+        if request.experimentMode.usesSegmentation, !mergedInput.segments.isEmpty {
+            let refinedSegmentation = AppleIntelligenceContextSegmenter.refine(
+                segments: mergedInput.segments,
+                joinersAfter: mergedInput.segmentJoinersAfter
+            )
+            let beforeCount = mergedInput.segments.count
+            mergedInput.segments = refinedSegmentation.segments
+            mergedInput.segmentJoinersAfter = refinedSegmentation.joinersAfter
+            traces.append(
+                PreprocessTrace(
+                    step: "ai-heuristic-context-front-stage",
+                    summary: "context-boundary-splits=\(refinedSegmentation.diagnostics.frontBoundarySplitCount), chunks=\(refinedSegmentation.diagnostics.frontChunkCount)"
+                )
+            )
+            traces.append(
+                PreprocessTrace(
+                    step: "ai-heuristic-context-back-stage",
+                    summary: "intra-chunk-merges=\(refinedSegmentation.diagnostics.backMergeCount), output-segments=\(refinedSegmentation.segments.count)"
+                )
+            )
+            traces.append(
+                PreprocessTrace(
+                    step: "ai-heuristic-context-segmentation",
+                    summary: "segments \(beforeCount) -> \(mergedInput.segments.count), method=ai-context-front+back"
+                )
+            )
+        }
+
         return (
             input: mergedInput,
             traces: traces
         )
     }
+}
+
+private enum AppleIntelligenceContextSegmenter {
+    private static let preferredMinimumChars = 180
+    private static let preferredMaximumChars = 420
+    private static let hardMaximumChars = 520
+
+    static func refine(segments: [TextSegment], joinersAfter: [String]) -> HeuristicSegmentationResult {
+        guard !segments.isEmpty else {
+            return HeuristicSegmentationResult(
+                segments: [],
+                joinersAfter: [],
+                diagnostics: ContextSegmentationDiagnostics(
+                    frontBoundarySplitCount: 0,
+                    frontChunkCount: 0,
+                    backMergeCount: 0
+                )
+            )
+        }
+
+        var refinedTexts: [String] = []
+        var refinedJoiners: [String] = []
+        var frontBoundarySplits = 0
+        var frontChunkCount = 0
+        var backMergeCount = 0
+
+        for (index, segment) in segments.enumerated() {
+            let outerJoiner = joinersAfter.indices.contains(index) ? joinersAfter[index] : ""
+            let units = sentenceUnits(in: segment.text, finalJoiner: outerJoiner)
+            guard !units.isEmpty else { continue }
+
+            let frontChunks = splitByContextBoundary(units)
+            frontChunkCount += frontChunks.count
+            frontBoundarySplits += max(0, frontChunks.count - 1)
+
+            for chunk in frontChunks where !chunk.isEmpty {
+                if chunk.count == 1 {
+                    refinedTexts.append(chunk[0].text)
+                    refinedJoiners.append(chunk[0].joinerAfter)
+                    continue
+                }
+
+                var currentText = chunk[0].text
+                for unitIndex in 1..<chunk.count {
+                    let bridge = chunk[unitIndex - 1].joinerAfter
+                    let candidate = currentText + bridge + chunk[unitIndex].text
+                    if shouldMergeCandidate(current: currentText, candidate: candidate) {
+                        currentText = candidate
+                        backMergeCount += 1
+                    } else {
+                        refinedTexts.append(currentText)
+                        refinedJoiners.append(chunk[unitIndex - 1].joinerAfter)
+                        currentText = chunk[unitIndex].text
+                    }
+                }
+
+                if let last = chunk.last {
+                    refinedTexts.append(currentText)
+                    refinedJoiners.append(last.joinerAfter)
+                }
+            }
+        }
+
+        if refinedTexts.isEmpty {
+            return HeuristicSegmentationResult(
+                segments: segments,
+                joinersAfter: joinersAfter,
+                diagnostics: ContextSegmentationDiagnostics(
+                    frontBoundarySplitCount: frontBoundarySplits,
+                    frontChunkCount: frontChunkCount,
+                    backMergeCount: backMergeCount
+                )
+            )
+        }
+
+        let indexedSegments = refinedTexts.enumerated().map { idx, text in
+            TextSegment(index: idx, text: text)
+        }
+        return HeuristicSegmentationResult(
+            segments: indexedSegments,
+            joinersAfter: refinedJoiners,
+            diagnostics: ContextSegmentationDiagnostics(
+                frontBoundarySplitCount: frontBoundarySplits,
+                frontChunkCount: frontChunkCount,
+                backMergeCount: backMergeCount
+            )
+        )
+    }
+
+    // Stage 1: split clearly unrelated contexts before size optimization.
+    private static func splitByContextBoundary(_ units: [SentenceUnit]) -> [[SentenceUnit]] {
+        guard !units.isEmpty else { return [] }
+        var chunks: [[SentenceUnit]] = [[units[0]]]
+
+        for index in 1..<units.count {
+            guard let previous = chunks[chunks.count - 1].last else {
+                chunks.append([units[index]])
+                continue
+            }
+            let current = units[index]
+
+            if shouldStartNewContext(previous: previous.text, current: current.text) {
+                chunks.append([current])
+            } else {
+                chunks[chunks.count - 1].append(current)
+            }
+        }
+
+        return chunks
+    }
+
+    private static func shouldStartNewContext(previous: String, current: String) -> Bool {
+        let prev = previous.trimmingCharacters(in: .whitespacesAndNewlines)
+        let curr = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prev.isEmpty, !curr.isEmpty else { return false }
+
+        if curr.hasPrefix("- ") || curr.hasPrefix("— ") || curr.hasPrefix("• ") || curr.hasPrefix("* ") {
+            return true
+        }
+
+        let prevTokens = topicalTokens(from: prev)
+        let currTokens = topicalTokens(from: curr)
+        guard !prevTokens.isEmpty, !currTokens.isEmpty else { return false }
+
+        let overlap = prevTokens.intersection(currTokens).count
+        let minSize = min(prevTokens.count, currTokens.count)
+        let overlapRatio = minSize > 0 ? Double(overlap) / Double(minSize) : 0
+
+        return prev.count >= 120 && curr.count >= 120 && overlapRatio < 0.08
+    }
+
+    private static func topicalTokens(from text: String) -> Set<String> {
+        let stopWords: Set<String> = [
+            "the", "a", "an", "and", "or", "but", "to", "of", "in", "on", "for", "with",
+            "is", "are", "was", "were", "be", "been", "it", "this", "that", "as", "at",
+            "by", "from", "you", "we", "they", "he", "she", "i"
+        ]
+
+        return Set(
+            text.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.count >= 3 && !stopWords.contains($0) }
+        )
+    }
+
+    private static func shouldMergeCandidate(current: String, candidate: String) -> Bool {
+        let currentLength = current.count
+        let candidateLength = candidate.count
+
+        if currentLength < preferredMinimumChars {
+            return candidateLength <= hardMaximumChars
+        }
+
+        if candidateLength > hardMaximumChars {
+            return false
+        }
+
+        if currentLength >= preferredMinimumChars && candidateLength > preferredMaximumChars {
+            return false
+        }
+
+        return true
+    }
+
+    private static func sentenceUnits(in text: String, finalJoiner: String) -> [SentenceUnit] {
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = text
+
+        var ranges: [Range<String.Index>] = []
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            ranges.append(range)
+            return true
+        }
+
+        if ranges.isEmpty {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? [] : [SentenceUnit(text: trimmed, joinerAfter: finalJoiner)]
+        }
+
+        var units: [SentenceUnit] = []
+        for i in ranges.indices {
+            let sentence = String(text[ranges[i]]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !sentence.isEmpty else { continue }
+
+            let joiner: String
+            if i + 1 < ranges.count {
+                joiner = String(text[ranges[i].upperBound..<ranges[i + 1].lowerBound])
+            } else {
+                joiner = finalJoiner
+            }
+            units.append(SentenceUnit(text: sentence, joinerAfter: joiner))
+        }
+        return units
+    }
+}
+
+private struct SentenceUnit {
+    let text: String
+    let joinerAfter: String
+}
+
+private struct HeuristicSegmentationResult {
+    let segments: [TextSegment]
+    let joinersAfter: [String]
+    let diagnostics: ContextSegmentationDiagnostics
+}
+
+private struct ContextSegmentationDiagnostics {
+    let frontBoundarySplitCount: Int
+    let frontChunkCount: Int
+    let backMergeCount: Int
 }
 
 private struct HeuristicLanguageDetectionResult {
