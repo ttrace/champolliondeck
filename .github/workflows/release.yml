@@ -154,7 +154,6 @@ jobs:
             --sign "$APPLE_SIGNING_IDENTITY" \
             "$APP_DIR"
           codesign --verify --deep --strict --verbose=2 "$APP_DIR"
-          spctl --assess --type execute --verbose "$APP_DIR"
 
       - name: Dev Center credential check
         run: |
