@@ -19,6 +19,11 @@ Current product direction:
   - iPhone / early stage: Foundation Models-centered implementation
   - macOS / later stage: custom translation model via Core ML
 
+Strategic direction update:
+- Maximize Apple Intelligence (Foundation Models) usage for heuristic preprocessing.
+- Prioritize practical local MT quality through model-assisted heuristics over handcrafted rules.
+- Avoid dictionary-heavy or purpose-specific deterministic algorithms unless strictly required for reliability/safety.
+
 ## Core Design Principles
 1. Do not tightly couple Foundation Models and Core ML.
    - Treat them as separate engines behind a shared interface.
@@ -29,17 +34,14 @@ Current product direction:
    - Preprocessing should be reusable across engines.
    - Translation engines should receive structured input, not raw UI state.
 
-3. Prefer deterministic logic where possible.
-   - Sentence splitting
-   - glossary matching
-   - protected-term extraction
-   - formatting preservation
-   - symbol / punctuation normalization
-   These should be implemented as ordinary program logic first, not delegated blindly to an LLM.
+3. Prefer heuristic preprocessing backed by Apple Intelligence when quality benefits are expected.
+   - Use deterministic logic mainly as guardrails, fallback behavior, and safety-critical constraints.
+   - Avoid overfitting segmentation/normalization to specific terms or handcrafted exception dictionaries.
+   - Keep deterministic rules minimal, explainable, and easy to remove when model-driven heuristics perform better.
 
-4. Use Foundation Models conservatively.
-   - Good for soft analysis, classification, hint generation, ambiguity detection
-   - Avoid making app-critical behavior depend entirely on nondeterministic model output
+4. Use Foundation Models as the primary heuristic layer.
+   - Preferred for analysis, classification, hint generation, ambiguity detection, and adaptive preprocessing.
+   - Keep deterministic fallbacks for resilience when model output is unavailable or unsafe.
 
 5. Optimize for observability.
    - Preserve intermediate analysis results

@@ -179,61 +179,33 @@ enum SentenceSegmenter {
             return SegmentationResult(segments: [], joinersAfter: [])
         }
 
-        let delimiters = CharacterSet(charactersIn: ".!?。！？")
-        var segments: [TextSegment] = []
-        var joinersAfter: [String] = []
-        var currentSegment = ""
-        var collectingJoiner = false
-        var insideURL = false
-
-        for scalar in trimmed.unicodeScalars {
-            let character = Character(scalar)
-            let isDelimiter = delimiters.contains(scalar)
-            let isWhitespace = CharacterSet.whitespacesAndNewlines.contains(scalar)
-
-            if collectingJoiner {
-                if isDelimiter || isWhitespace {
-                    if !joinersAfter.isEmpty {
-                        joinersAfter[joinersAfter.count - 1].append(character)
-                    }
-                    continue
-                }
-                collectingJoiner = false
-                currentSegment.append(character)
-                continue
-            }
-
-            if insideURL {
-                currentSegment.append(character)
-                if isWhitespace {
-                    insideURL = false
-                }
-                continue
-            }
-
-            if isDelimiter {
-                let segmentText = currentSegment.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !segmentText.isEmpty {
-                    segments.append(TextSegment(index: segments.count, text: segmentText))
-                    joinersAfter.append(String(character))
-                    currentSegment = ""
-                    collectingJoiner = true
-                } else if !joinersAfter.isEmpty {
-                    joinersAfter[joinersAfter.count - 1].append(character)
-                }
-                continue
-            }
-
-            currentSegment.append(character)
-            let lowered = currentSegment.lowercased()
-            if lowered.hasSuffix("http://") || lowered.hasSuffix("https://") {
-                insideURL = true
-            }
+        let separators = separatorMatches(in: trimmed)
+        if separators.isEmpty {
+            return SegmentationResult(
+                segments: [TextSegment(index: 0, text: trimmed)],
+                joinersAfter: [""]
+            )
         }
 
-        let trailingSegment = currentSegment.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trailingSegment.isEmpty {
-            segments.append(TextSegment(index: segments.count, text: trailingSegment))
+        var segments: [TextSegment] = []
+        var joinersAfter: [String] = []
+        var cursor = trimmed.startIndex
+
+        for match in separators {
+            let segmentRange = cursor..<match.range.lowerBound
+            let segmentText = String(trimmed[segmentRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !segmentText.isEmpty {
+                segments.append(TextSegment(index: segments.count, text: segmentText))
+                joinersAfter.append(String(trimmed[match.range]))
+            } else if !joinersAfter.isEmpty {
+                joinersAfter[joinersAfter.count - 1] += String(trimmed[match.range])
+            }
+            cursor = match.range.upperBound
+        }
+
+        let trailingText = String(trimmed[cursor...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trailingText.isEmpty {
+            segments.append(TextSegment(index: segments.count, text: trailingText))
             joinersAfter.append("")
         }
 
@@ -246,6 +218,39 @@ enum SentenceSegmenter {
 
         return SegmentationResult(segments: segments, joinersAfter: joinersAfter)
     }
+
+    private static func separatorMatches(in text: String) -> [SeparatorMatch] {
+        let nsText = text as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+
+        let blankLineRegex = try! NSRegularExpression(pattern: #"\n[ \t]*\n+"#)
+        let dialogueLineRegex = try! NSRegularExpression(
+            pattern: #"(?m)\n(?=\s*(?:(?:[-—•*]\s+\S)|(?:[「『“"']\S)|(?:[A-Za-z][A-Za-z0-9 _-]{0,20}:\s)))"#
+        )
+
+        let blankLineMatches = blankLineRegex.matches(in: text, range: fullRange)
+        let dialogueMatches = dialogueLineRegex.matches(in: text, range: fullRange)
+
+        let allMatches = (blankLineMatches + dialogueMatches)
+            .sorted { $0.range.location < $1.range.location }
+
+        var resolved: [SeparatorMatch] = []
+        for match in allMatches {
+            guard let range = Range(match.range, in: text) else { continue }
+            if let last = resolved.last {
+                let overlaps = range.lowerBound < last.range.upperBound
+                if overlaps {
+                    continue
+                }
+            }
+            resolved.append(SeparatorMatch(range: range))
+        }
+        return resolved
+    }
+}
+
+private struct SeparatorMatch {
+    let range: Range<String.Index>
 }
 
 struct SegmentationResult {

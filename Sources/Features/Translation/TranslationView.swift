@@ -223,9 +223,20 @@ struct TranslationView: View {
                     .font(.body)
                     .foregroundStyle(.red)
             } else {
-                Text(viewModel.statusText)
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
+                HStack(spacing: 10) {
+                    Text(viewModel.statusText)
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
+                    Spacer()
+                    if viewModel.isTranslating {
+                        Button {
+                            viewModel.stopTranslation()
+                        } label: {
+                            Label("Stop", systemImage: "stop.fill")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
             }
         }
         .padding(22)

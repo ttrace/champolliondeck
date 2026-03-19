@@ -204,7 +204,7 @@ jobs:
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" \
               --title "Pre-Babel Lens $TAG" \
-              --notes "Signed + notarized macOS release for Pre-Babel Lens."
+              --notes "Signed + notarized macOS release for Pre-Babel Lens. See Changelog: https://github.com/ttrace/pre-babel-lens/blob/${TAG}/Changelog.md"
           fi
 
           gh release upload "$TAG" "$DMG_PATH" --clobber

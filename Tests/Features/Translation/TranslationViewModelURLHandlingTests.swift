@@ -35,6 +35,21 @@ struct TranslationViewModelURLHandlingTests {
         #expect(await counter.current() == 1)
     }
 
+    @Test
+    func handleIncomingURLAllowsSameTextWhenExperimentModeChanged() async throws {
+        let counter = TranslationCallCounter()
+        let viewModel = await makeViewModel(counter: counter)
+        let url = try #require(URL(string: "prebabellens://translate?text=Same%20text"))
+
+        await viewModel.handleIncomingURL(url)
+        await MainActor.run {
+            viewModel.experimentMode = .segmentedGlossary
+        }
+        await viewModel.handleIncomingURL(url)
+
+        #expect(await counter.current() == 2)
+    }
+
     @MainActor
     private func makeViewModel(counter: TranslationCallCounter) -> TranslationViewModel {
         let engine = CountingTranslationEngine(counter: counter)

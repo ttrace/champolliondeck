@@ -62,6 +62,36 @@ struct AppleIntelligencePreprocessEngineTests {
     }
 
     @Test
+    func compositePreprocessAppliesAiContextSegmentationAfterExplicitSplit() {
+        let text = """
+        This is sentence one. This is sentence two. This is sentence three. This is sentence four.
+
+        This paragraph should stay separate because the blank line is an explicit boundary.
+        """
+
+        let request = TranslationRequest(
+            sourceLanguage: "en",
+            targetLanguage: "ja",
+            text: text,
+            glossary: [],
+            experimentMode: .segmented
+        )
+
+        let engine = CompositePreprocessEngine(
+            deterministicEngine: DeterministicPreprocessEngine(),
+            appleIntelligenceEngine: AppleIntelligencePreprocessEngine()
+        )
+
+        let result = engine.analyze(request)
+
+        #expect(result.input.segments.count >= 2)
+        #expect(result.traces.contains(where: { $0.step == "ai-heuristic-context-front-stage" }))
+        #expect(result.traces.contains(where: { $0.step == "ai-heuristic-context-back-stage" }))
+        #expect(result.traces.contains(where: { $0.step == "ai-heuristic-context-segmentation" }))
+        #expect(result.input.segmentJoinersAfter.count == result.input.segments.count)
+    }
+
+    @Test
     func heuristicLanguageDetectionForUnsafeCandidateParagraphStillDetectsEnglish() {
         let text = """
         Corporate Media “Happily Manufacturing Consent” for Iran War- So What Are You Going to Do About It?
