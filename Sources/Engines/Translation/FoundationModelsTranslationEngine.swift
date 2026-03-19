@@ -83,23 +83,15 @@ private enum FoundationModelsRuntimeTranslator {
                     onPartialResult: onPartialResult
                 )
             } catch {
-                if isLikelyUnsafeGenerationError(error) {
+                if shouldRetryOrFallbackForGeneration(error) {
                     let safePrompt = promptForSensitiveContentSegment(segment.text, input: input)
-                    do {
-                        finalText = try await translateSegment(
-                            prompt: safePrompt,
-                            sourceText: segment.text,
-                            using: sensitiveContentSession,
-                            segmentIndex: segment.index,
-                            onPartialResult: onPartialResult
-                        )
-                    } catch {
-                        if isLikelyUnsafeGenerationError(error) {
-                            finalText = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        } else {
-                            throw error
-                        }
-                    }
+                    finalText = await fallbackSafeSegmentTranslation(
+                        safePrompt: safePrompt,
+                        sourceText: segment.text,
+                        session: sensitiveContentSession,
+                        segmentIndex: segment.index,
+                        onPartialResult: onPartialResult
+                    )
                 } else {
                     throw error
                 }
@@ -210,6 +202,7 @@ private enum FoundationModelsRuntimeTranslator {
         Keep meaning and tone faithful.
         Return only the translated text.
         Do not refuse, summarize, or add warnings.
+        If any part cannot be translated due to safety restrictions, keep only that part in the original language and annotate it with "原文ママ".
         """
     }
 
@@ -261,15 +254,44 @@ private enum FoundationModelsRuntimeTranslator {
         return lines.joined(separator: "\n")
     }
 
-    private static func isLikelyUnsafeGenerationError(_ error: Error) -> Bool {
+    private static func fallbackSafeSegmentTranslation(
+        safePrompt: String,
+        sourceText: String,
+        session: LanguageModelSession,
+        segmentIndex: Int,
+        onPartialResult: (@Sendable (_ segmentIndex: Int, _ partialTranslation: String) -> Void)?
+    ) async -> String {
+        do {
+            return try await translateSegment(
+                prompt: safePrompt,
+                sourceText: sourceText,
+                using: session,
+                segmentIndex: segmentIndex,
+                onPartialResult: onPartialResult
+            )
+        } catch {
+            return sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private static func shouldRetryOrFallbackForGeneration(_ error: Error) -> Bool {
         let nsError = error as NSError
-        if nsError.domain.contains("FoundationModels.LanguageModelSession.GenerationError"),
-           nsError.code == 2 {
+        if nsError.domain.contains("FoundationModels.LanguageModelSession.GenerationError") {
+            return true
+        }
+
+        let reflectedType = String(reflecting: type(of: error))
+        if reflectedType.contains("LanguageModelSession.GenerationError")
+            || reflectedType.contains("GenerationError")
+        {
             return true
         }
 
         let localized = error.localizedDescription.lowercased()
         return localized.contains("unsafe")
+            || localized.contains("safety")
+            || localized.contains("content")
+            || localized.contains("policy")
     }
 }
 
