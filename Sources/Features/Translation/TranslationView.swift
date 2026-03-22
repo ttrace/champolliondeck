@@ -92,24 +92,13 @@ struct TranslationView: View {
                             .frame(minHeight: 80)
                     }
 
-                    HStack(alignment: .top, spacing: 12) {
-                        GroupBox("Deterministic Analysis") {
-                            ScrollView {
-                                Text(deterministicAnalysisText)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .frame(minHeight: 140)
+                    GroupBox("Indexes") {
+                        ScrollView {
+                            Text(indexesText)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
-
-                        GroupBox("Heuristic Analysis") {
-                            ScrollView {
-                                Text(heuristicAnalysisText)
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .frame(minHeight: 140)
-                        }
+                        .frame(minHeight: 140)
                     }
 
                     GroupBox("Console") {
@@ -249,70 +238,24 @@ struct TranslationView: View {
     // #endregion
 
     // #region MARK: Derived Text
-    private var deterministicAnalysisText: String {
+    private var indexesText: String {
         [
             "Engine: \(viewModel.engineName.isEmpty ? "(none)" : viewModel.engineName)",
             "Mode: \(viewModel.experimentMode.displayName)",
-            "Detected language (deterministic): \(deterministicDetectedLanguageCode)",
-            "Processing time: \(processingTimeText(in: deterministicTraces, preferredStep: "deterministic-processing-time"))",
+            "Detected language: \(viewModel.detectedLanguageCode.isEmpty ? "(none)" : viewModel.detectedLanguageCode)",
+            "Language support index: \(viewModel.aiLanguageSupported ? "supported" : "unsupported")",
+            "Processing time index: \(processingTimeIndex)",
             "Protected tokens: \(viewModel.protectedTokens.count)",
             "Glossary matches: \(viewModel.glossaryMatches.count)",
             "Ambiguity hints: \(viewModel.ambiguityHints.count)",
-            "Trace steps: \(deterministicTraces.count)",
-            "Trace details:",
-            traceText(for: deterministicTraces),
+            "Trace steps: \(viewModel.traces.count)",
         ].joined(separator: "\n")
     }
 
-    private var heuristicAnalysisText: String {
-        [
-            "Processing time: \(processingTimeText(in: heuristicTraces, preferredStep: "ai-heuristic-processing-time"))",
-            "Detected language (final): \(viewModel.detectedLanguageCode.isEmpty ? "(none)" : viewModel.detectedLanguageCode)",
-            "AI language support: \(viewModel.aiLanguageSupported ? "yes" : "no")",
-            "Heuristic trace steps: \(heuristicTraces.count)",
-            "Trace details:",
-            traceText(for: heuristicTraces),
-        ].joined(separator: "\n")
-    }
-
-    private var deterministicTraces: [PreprocessTrace] {
-        viewModel.traces.filter { !isHeuristicTrace($0) }
-    }
-
-    private var heuristicTraces: [PreprocessTrace] {
-        viewModel.traces.filter { isHeuristicTrace($0) }
-    }
-
-    private func isHeuristicTrace(_ trace: PreprocessTrace) -> Bool {
-        let step = trace.step.lowercased()
-        let summary = trace.summary.lowercased()
-        return step.contains("ai")
-            || step.contains("heuristic")
-            || summary.contains("heuristic")
-            || summary.contains("fm-")
-    }
-
-    private func traceText(for traces: [PreprocessTrace]) -> String {
-        guard !traces.isEmpty else { return "(none)" }
-        return traces.map { "\($0.step): \($0.summary)" }.joined(separator: "\n")
-    }
-
-    private var deterministicDetectedLanguageCode: String {
-        guard let trace = deterministicTraces.first(where: { $0.step == "language-detection" }) else {
-            return "(none)"
-        }
-
-        let summary = trace.summary
-        guard let start = summary.range(of: "detected=")?.upperBound else {
-            return "(none)"
-        }
-        let rest = summary[start...]
-        let code = rest.split(separator: ",").first.map(String.init)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return code.isEmpty ? "(none)" : code
-    }
-
-    private func processingTimeText(in traces: [PreprocessTrace], preferredStep: String) -> String {
-        traces.first(where: { $0.step == preferredStep })?.summary ?? "(n/a)"
+    private var processingTimeIndex: String {
+        let timingTrace = viewModel.traces.first(where: { $0.step.contains("processing-time") })
+            ?? viewModel.traces.last(where: { $0.step.contains("processing-time") })
+        return timingTrace?.summary ?? "(n/a)"
     }
     // #endregion
 

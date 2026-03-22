@@ -4,7 +4,7 @@ import Foundation
 final class TranslationViewModel: ObservableObject {
     enum TranslationStatus: Equatable {
         case ready
-        case preprocessing(mode: TranslationExperimentMode)
+        case processing(mode: TranslationExperimentMode)
         case translating(current: Int, total: Int)
         case stopped
         case completed
@@ -148,7 +148,7 @@ final class TranslationViewModel: ObservableObject {
         errorMessage = nil
         partialTranslationsBySegment = [:]
         partialJoinersAfter = []
-        status = .preprocessing(mode: experimentMode)
+        status = .processing(mode: experimentMode)
 
         isTranslating = true
         defer { isTranslating = false }
@@ -177,7 +177,6 @@ final class TranslationViewModel: ObservableObject {
             detectedLanguageCode = output.analysis.input.detectedLanguageCode ?? ""
             aiLanguageSupported = output.analysis.input.isDetectedLanguageSupportedByAppleIntelligence
             errorMessage = nil
-            appendHeuristicSegmentationLogs(from: output.analysis.traces)
             status = .completed
             appendDeveloperLog("Translation succeeded. segments=\(output.segmentOutputs.count), detected=\(detectedLanguageCode.isEmpty ? "none" : detectedLanguageCode)")
         } catch is CancellationError {
@@ -202,8 +201,8 @@ final class TranslationViewModel: ObservableObject {
         switch status {
         case .ready:
             return "Ready"
-        case .preprocessing(let mode):
-            return "Preprocessing (\(mode.displayName))"
+        case .processing(let mode):
+            return "Processing (\(mode.displayName))"
         case .translating(let current, let total):
             return "Translating \(current)/\(total)"
         case .stopped:
@@ -280,17 +279,6 @@ final class TranslationViewModel: ObservableObject {
         }
     }
 
-    private func appendHeuristicSegmentationLogs(from traces: [PreprocessTrace]) {
-        let stepsToReport = Set([
-            "ai-heuristic-context-front-stage",
-            "ai-heuristic-context-back-stage",
-            "ai-heuristic-context-segmentation",
-        ])
-
-        for trace in traces where stepsToReport.contains(trace.step) {
-            appendDeveloperLog("Heuristic \(trace.step): \(trace.summary)")
-        }
-    }
 }
 
 private enum URLLaunchParser {
