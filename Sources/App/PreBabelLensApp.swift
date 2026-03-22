@@ -8,10 +8,7 @@ struct PreBabelLens: App {
     private let viewModel: TranslationViewModel
 
     init() {
-        let preprocess = CompositePreprocessEngine(
-            deterministicEngine: DeterministicPreprocessEngine(),
-            appleIntelligenceEngine: AppleIntelligencePreprocessEngine()
-        )
+        let preprocess = DeterministicPreprocessEngine()
         let translationEngine = FoundationModelsTranslationEngine()
         let policy = FixedTranslationEnginePolicy(engine: translationEngine)
         let launchInputText = Self.launchInputText()

@@ -1,8 +1,5 @@
 import Foundation
 import NaturalLanguage
-#if canImport(FoundationModels)
-import FoundationModels
-#endif
 
 struct DeterministicPreprocessEngine: PreprocessEngine {
     let name: String = "deterministic-v1"
@@ -14,7 +11,7 @@ struct DeterministicPreprocessEngine: PreprocessEngine {
             PreprocessTrace(step: "experiment-mode", summary: request.experimentMode.rawValue)
         )
 
-        let languageDetection = FoundationModelsHeuristicLanguageDetector.detectLanguage(text: request.text)
+        let languageDetection = HeuristicLanguageDetector.detectLanguage(text: request.text)
         let detectedLanguage = languageDetection.detectedLanguageCode
         let isSupportedByAppleIntelligence = languageDetection.isSupportedByAppleIntelligence
         traces.append(
@@ -82,25 +79,25 @@ struct DeterministicPreprocessEngine: PreprocessEngine {
     }
 }
 
-struct FoundationModelsLanguageDetectionResult {
+struct HeuristicLanguageDetectionResult {
     var detectedLanguageCode: String
     var isSupportedByAppleIntelligence: Bool
     var method: String
 }
 
-enum FoundationModelsHeuristicLanguageDetector {
+enum HeuristicLanguageDetector {
     private static let fallbackSupportedLanguageCodes: Set<String> = [
         "da", "de", "en", "es", "fr", "it", "ja", "ko",
         "nb", "nl", "pt", "sv", "tr", "vi", "zh"
     ]
 
-    static func detectLanguage(text: String) -> FoundationModelsLanguageDetectionResult {
+    static func detectLanguage(text: String) -> HeuristicLanguageDetectionResult {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return FoundationModelsLanguageDetectionResult(
+            return HeuristicLanguageDetectionResult(
                 detectedLanguageCode: "und",
                 isSupportedByAppleIntelligence: false,
-                method: "fm-heuristic-empty-input"
+                method: "heuristic-empty-input"
             )
         }
 
@@ -111,10 +108,10 @@ enum FoundationModelsHeuristicLanguageDetector {
         let supported = supportedLanguageCodes()
 
         if supported.contains(dominant) {
-            return FoundationModelsLanguageDetectionResult(
+            return HeuristicLanguageDetectionResult(
                 detectedLanguageCode: dominant,
                 isSupportedByAppleIntelligence: true,
-                method: "fm-heuristic-dominant-supported"
+                method: "heuristic-dominant-supported"
             )
         }
 
@@ -123,30 +120,21 @@ enum FoundationModelsHeuristicLanguageDetector {
             .sorted { $0.1 > $1.1 }
 
         if let supportedCandidate = hypotheses.first(where: { supported.contains($0.0) }) {
-            return FoundationModelsLanguageDetectionResult(
+            return HeuristicLanguageDetectionResult(
                 detectedLanguageCode: supportedCandidate.0,
                 isSupportedByAppleIntelligence: true,
-                method: "fm-heuristic-hypothesis-supported"
+                method: "heuristic-hypothesis-supported"
             )
         }
 
-        return FoundationModelsLanguageDetectionResult(
+        return HeuristicLanguageDetectionResult(
             detectedLanguageCode: dominant,
             isSupportedByAppleIntelligence: false,
-            method: "fm-heuristic-unsupported"
+            method: "heuristic-unsupported"
         )
     }
 
     private static func supportedLanguageCodes() -> Set<String> {
-#if canImport(FoundationModels)
-        if #available(macOS 26.0, iOS 26.0, *) {
-            return Set(
-                SystemLanguageModel.default.supportedLanguages.compactMap {
-                    $0.languageCode?.identifier.lowercased()
-                }
-            )
-        }
-#endif
         return fallbackSupportedLanguageCodes
     }
 
