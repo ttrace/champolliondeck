@@ -23,6 +23,8 @@ Strategic direction update:
 - Maximize Apple Intelligence (Foundation Models) usage for heuristic preprocessing.
 - Prioritize practical local MT quality through model-assisted heuristics over handcrafted rules.
 - Avoid dictionary-heavy or purpose-specific deterministic algorithms unless strictly required for reliability/safety.
+- Foundation Models structured generation must prefer `@Generable` and `@Guide` schemas over prompt-defined JSON formats.
+- Minimize prompt engineering for structure; use prompts mainly for task intent/context while enforcing output shape via typed generation.
 
 ## Core Design Principles
 1. Do not tightly couple Foundation Models and Core ML.
@@ -184,3 +186,44 @@ Unless explicitly requested, do not:
 - collapse preprocessing and translation into one opaque pipeline
 - hardwire the app to a single model backend
 - introduce large frameworks for simple tasks
+
+## Session Handoff (2026-03-23)
+Current branch:
+- `main`
+
+Working tree status:
+- Uncommitted changes exist in:
+  - `Sources/Domain/TranslationModels.swift`
+  - `Sources/Domain/TranslationProtocols.swift`
+  - `Sources/Engines/Translation/FoundationModelsTranslationEngine.swift`
+  - `Sources/Features/Translation/TranslationViewModel.swift`
+  - `Sources/Services/TranslationOrchestrator.swift`
+
+Implemented in this session (not yet committed):
+- Added `SegmentKind` enum and attached `kind` to `TextSegment` (default `.general`).
+- Switched Foundation Models translation output to structured JSON with:
+  - `targetLanguage`
+  - `kind`
+  - `translation`
+- Added structured-output validation for:
+  - target language mismatch
+  - kind mismatch
+  - empty translation
+- Added retry/fallback diagnostic events and routed them to ViewModel console.
+- Updated translation console logs to session-scoped format (`[Sx] ...`).
+- Added session-start kind summary logging (e.g. `kinds={general=...}`).
+- Updated prompt example text to use `"<translated text>"` (no ellipsis placeholder).
+
+Important behavior notes:
+- Current segmentation still defaults to `kind = .general` unless explicitly assigned.
+- Console now includes timing indexes and diagnostic retry/fallback events per session.
+
+Known verification gap:
+- Build/test not executed successfully in this environment due local toolchain/SDK mismatch.
+- Next session should run local build/tests in user’s normal Xcode toolchain before release.
+
+Suggested next steps:
+1. Build and run app in Xcode toolchain.
+2. Verify structured output stability with multiple target languages.
+3. Confirm session logs include kind and session prefix for retry cases.
+4. Optionally implement deterministic kind classifier in preprocess layer.

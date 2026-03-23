@@ -24,7 +24,10 @@ struct TranslationOrchestrator: Sendable {
 
     func translate(
         _ request: TranslationRequest,
-        onPartialSegmentResult: (@Sendable (_ segmentIndex: Int, _ partialTranslation: String, _ joinersAfter: [String]) -> Void)? = nil
+        onSessionStarted: (@Sendable (_ segmentCount: Int, _ detectedLanguageCode: String, _ targetLanguage: String, _ kindSummary: String) -> Void)? = nil,
+        onDiagnosticEvent: (@Sendable (_ message: String) -> Void)? = nil,
+        onPartialSegmentResult: (@Sendable (_ segmentIndex: Int, _ partialTranslation: String, _ joinersAfter: [String]) -> Void)? = nil,
+        onSessionFinished: (@Sendable () -> Void)? = nil
     ) async throws -> TranslationOutput {
         let preprocessResult = preprocessEngine.analyze(request)
         let input = preprocessResult.input
@@ -37,13 +40,34 @@ struct TranslationOrchestrator: Sendable {
             )
         }
 
-        let segmentOutputs = try await engine.translate(
-            input,
-            onPartialResult: { segmentIndex, partialTranslation in
-                onPartialSegmentResult?(segmentIndex, partialTranslation, input.segmentJoinersAfter)
-            }
+        let kindSummary = summarizeKinds(input.segments)
+        onSessionStarted?(
+            input.segments.count,
+            input.detectedLanguageCode ?? input.sourceLanguage,
+            request.targetLanguage,
+            kindSummary
         )
+        defer { onSessionFinished?() }
+
+        let segmentOutputs: [SegmentOutput]
+        if let diagnosticEngine = engine as? any DiagnosticCapableTranslationEngine {
+            segmentOutputs = try await diagnosticEngine.translate(
+                input,
+                onPartialResult: { segmentIndex, partialTranslation in
+                    onPartialSegmentResult?(segmentIndex, partialTranslation, input.segmentJoinersAfter)
+                },
+                onDiagnosticEvent: onDiagnosticEvent
+            )
             .sorted { $0.segmentIndex < $1.segmentIndex }
+        } else {
+            segmentOutputs = try await engine.translate(
+                input,
+                onPartialResult: { segmentIndex, partialTranslation in
+                    onPartialSegmentResult?(segmentIndex, partialTranslation, input.segmentJoinersAfter)
+                }
+            )
+            .sorted { $0.segmentIndex < $1.segmentIndex }
+        }
 
         let translatedText = reconstructTranslatedText(
             segmentTranslationsByIndex: Dictionary(
@@ -100,5 +124,15 @@ struct TranslationOrchestrator: Sendable {
             scalars.removeFirst()
         }
         return String(scalars)
+    }
+
+    private func summarizeKinds(_ segments: [TextSegment]) -> String {
+        guard !segments.isEmpty else { return "(none)" }
+        let grouped = Dictionary(grouping: segments, by: \.kind)
+        return SegmentKind.allCases.compactMap { kind in
+            guard let count = grouped[kind]?.count else { return nil }
+            return "\(kind.rawValue)=\(count)"
+        }
+        .joined(separator: ", ")
     }
 }

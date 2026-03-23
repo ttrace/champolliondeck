@@ -37,6 +37,12 @@ final class TranslationViewModel: ObservableObject {
     private var lastHandledIncomingURLKey: String?
     private var activeTranslationTask: Task<Void, Never>?
     private var activeTranslationToken: UUID?
+    private var pendingTranslationRequestStartedAt: Date?
+    private var sessionSequenceNumber: Int = 0
+    private var activeMetricsSessionID: String?
+    private var activeMetricsRequestStartedAt: Date?
+    private var activeMetricsSessionStartedAt: Date?
+    private var activeMetricsFirstOutputAt: Date?
 
     init(orchestrator: TranslationOrchestrator, launchInputText: String? = nil) {
         let options = AppleIntelligenceLanguageCatalog.supportedLanguageOptions()
@@ -86,6 +92,7 @@ final class TranslationViewModel: ObservableObject {
     }
 
     func translate() async {
+        pendingTranslationRequestStartedAt = Date()
         await runManagedTranslation()
     }
 
@@ -134,8 +141,18 @@ final class TranslationViewModel: ObservableObject {
             aiLanguageSupported = true
             errorMessage = nil
             status = .ready
+            pendingTranslationRequestStartedAt = nil
+            resetSessionMetricsState()
             return
         }
+
+        sessionSequenceNumber += 1
+        let sessionID = "S\(sessionSequenceNumber)"
+        activeMetricsSessionID = sessionID
+        activeMetricsRequestStartedAt = pendingTranslationRequestStartedAt ?? Date()
+        activeMetricsSessionStartedAt = nil
+        activeMetricsFirstOutputAt = nil
+        pendingTranslationRequestStartedAt = nil
 
         translatedText = ""
         traces = []
@@ -156,9 +173,24 @@ final class TranslationViewModel: ObservableObject {
         do {
             let output = try await orchestrator.translate(
                 request,
+                onSessionStarted: { [weak self] segmentCount, detectedLanguageCode, targetLanguage, kindSummary in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.appendSessionLog(
+                            "session-start: segments=\(segmentCount), detected=\(detectedLanguageCode.isEmpty ? "none" : detectedLanguageCode), target=\(targetLanguage), kinds={\(kindSummary)}"
+                        )
+                        self.recordSessionStarted()
+                    }
+                },
+                onDiagnosticEvent: { [weak self] message in
+                    Task { @MainActor in
+                        self?.appendSessionLog(message)
+                    }
+                },
                 onPartialSegmentResult: { [weak self] segmentIndex, partialText, joinersAfter in
                     Task { @MainActor in
                         guard let self else { return }
+                        self.recordFirstOutputIfNeeded()
                         self.partialTranslationsBySegment[segmentIndex] = partialText
                         self.partialJoinersAfter = joinersAfter
                         self.translatedText = self.reconstructPartialTranslatedText()
@@ -166,8 +198,14 @@ final class TranslationViewModel: ObservableObject {
                         let currentSegment = min(totalSegments, max(1, segmentIndex + 1))
                         self.status = .translating(current: currentSegment, total: totalSegments)
                     }
+                },
+                onSessionFinished: { [weak self] in
+                    Task { @MainActor in
+                        self?.recordSessionFinished()
+                    }
                 }
             )
+            recordFirstOutputIfNeeded()
             translatedText = output.translatedText
             traces = output.analysis.traces
             protectedTokens = output.analysis.input.protectedTokens
@@ -178,10 +216,9 @@ final class TranslationViewModel: ObservableObject {
             aiLanguageSupported = output.analysis.input.isDetectedLanguageSupportedByAppleIntelligence
             errorMessage = nil
             status = .completed
-            appendDeveloperLog("Translation succeeded. segments=\(output.segmentOutputs.count), detected=\(detectedLanguageCode.isEmpty ? "none" : detectedLanguageCode)")
         } catch is CancellationError {
             status = .stopped
-            appendDeveloperLog("Translation cancelled.")
+            appendSessionLog("translation-cancelled")
         } catch let pipelineError as TranslationPipelineError {
             if let detected = pipelineError.detectedLanguageCode {
                 detectedLanguageCode = detected
@@ -189,12 +226,14 @@ final class TranslationViewModel: ObservableObject {
             }
             errorMessage = pipelineError.localizedDescription
             status = .ready
-            appendDeveloperLog("Pipeline error: \(pipelineError.localizedDescription)")
+            appendSessionLog("pipeline-error: \(pipelineError.localizedDescription)")
         } catch {
             errorMessage = error.localizedDescription
             status = .ready
-            appendDeveloperLog(detailedErrorLog(from: error))
+            appendSessionLog(detailedErrorLog(from: error))
         }
+
+        resetSessionMetricsState()
     }
 
     var statusText: String {
@@ -210,6 +249,14 @@ final class TranslationViewModel: ObservableObject {
         case .completed:
             return "Completed"
         }
+    }
+
+    var developerLogsText: String {
+        developerLogs.joined(separator: "\n")
+    }
+
+    func clearDeveloperLogs() {
+        developerLogs.removeAll(keepingCapacity: true)
     }
 
     private func parseGlossary(_ raw: String) -> [GlossaryEntry] {
@@ -277,6 +324,53 @@ final class TranslationViewModel: ObservableObject {
         if developerLogs.count > 300 {
             developerLogs.removeFirst(developerLogs.count - 300)
         }
+    }
+
+    private func appendSessionLog(_ message: String) {
+        if let sessionID = activeMetricsSessionID {
+            appendDeveloperLog("[\(sessionID)] \(message)")
+            return
+        }
+        appendDeveloperLog(message)
+    }
+
+    private func recordSessionStarted() {
+        guard activeMetricsSessionStartedAt == nil else { return }
+        let now = Date()
+        activeMetricsSessionStartedAt = now
+
+        guard activeMetricsSessionID != nil else { return }
+        let timeToSessionStart = milliseconds(from: activeMetricsRequestStartedAt, to: now)
+        appendSessionLog("time-to-session-start: \(timeToSessionStart)")
+    }
+
+    private func recordFirstOutputIfNeeded() {
+        guard activeMetricsFirstOutputAt == nil else { return }
+        let now = Date()
+        activeMetricsFirstOutputAt = now
+
+        guard activeMetricsSessionID != nil else { return }
+        let timeToFirstOutput = milliseconds(from: activeMetricsSessionStartedAt, to: now)
+        appendSessionLog("time-to-first-output: \(timeToFirstOutput)")
+    }
+
+    private func recordSessionFinished() {
+        guard activeMetricsSessionID != nil else { return }
+        let now = Date()
+        let sessionDuration = milliseconds(from: activeMetricsSessionStartedAt, to: now)
+        appendSessionLog("session-duration: \(sessionDuration)")
+    }
+
+    private func resetSessionMetricsState() {
+        activeMetricsSessionID = nil
+        activeMetricsRequestStartedAt = nil
+        activeMetricsSessionStartedAt = nil
+        activeMetricsFirstOutputAt = nil
+    }
+
+    private func milliseconds(from start: Date?, to end: Date) -> String {
+        guard let start else { return "(n/a)" }
+        return String(format: "%.2f ms", end.timeIntervalSince(start) * 1_000)
     }
 
 }

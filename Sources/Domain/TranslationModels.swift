@@ -68,15 +68,26 @@ struct TranslationOutput: Equatable {
     var analysis: TranslationAnalysis
 }
 
+enum SegmentKind: String, CaseIterable, Codable, Hashable, Sendable {
+    case heading
+    case general
+    case dialogue
+    case uiLabels = "ui-labels"
+    case lists
+    case codesOrPath = "codes_or_path"
+}
+
 struct TextSegment: Hashable, Equatable, Identifiable {
     let id: UUID
     var index: Int
     var text: String
+    var kind: SegmentKind
 
-    init(id: UUID = UUID(), index: Int, text: String) {
+    init(id: UUID = UUID(), index: Int, text: String, kind: SegmentKind = .general) {
         self.id = id
         self.index = index
         self.text = text
+        self.kind = kind
     }
 }
 

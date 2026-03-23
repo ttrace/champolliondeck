@@ -101,18 +101,27 @@ struct TranslationView: View {
                         .frame(minHeight: 140)
                     }
 
-                    GroupBox("Console") {
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 6) {
-                                ForEach(Array(viewModel.developerLogs.enumerated()), id: \.offset) { _, line in
-                                    Text(line)
-                                        .font(.system(size: 12, design: .monospaced))
-                                        .textSelection(.enabled)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
+                    GroupBox {
+                        TextEditor(text: .constant(viewModel.developerLogsText))
+                            .font(.system(size: 12, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(minHeight: 120, maxHeight: 220)
+                            .scrollContentBackground(.hidden)
+                            .padding(8)
+                            .background(
+                                colorScheme == .dark ? Color.black.opacity(0.25) : Color.white.opacity(0.45),
+                                in: RoundedRectangle(cornerRadius: 12)
+                            )
+                    } label: {
+                        HStack {
+                            Text("Console")
+                            Spacer()
+                            Button("Clear") {
+                                viewModel.clearDeveloperLogs()
                             }
+                            .buttonStyle(.bordered)
+                            .disabled(viewModel.developerLogs.isEmpty)
                         }
-                        .frame(minHeight: 120, maxHeight: 220)
                     }
                 }
             }

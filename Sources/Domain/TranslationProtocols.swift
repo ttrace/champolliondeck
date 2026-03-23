@@ -14,6 +14,14 @@ protocol TranslationEngine: Sendable {
     ) async throws -> [SegmentOutput]
 }
 
+protocol DiagnosticCapableTranslationEngine: TranslationEngine {
+    func translate(
+        _ input: TranslationInput,
+        onPartialResult: (@Sendable (_ segmentIndex: Int, _ partialTranslation: String) -> Void)?,
+        onDiagnosticEvent: (@Sendable (_ message: String) -> Void)?
+    ) async throws -> [SegmentOutput]
+}
+
 protocol TranslationEnginePolicy: Sendable {
     func resolveEngine(for request: TranslationRequest) -> TranslationEngine
 }
