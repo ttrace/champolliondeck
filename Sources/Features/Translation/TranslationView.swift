@@ -2,6 +2,8 @@ import SwiftUI
 
 #if os(macOS)
     import AppKit
+#elseif canImport(UIKit)
+    import UIKit
 #endif
 
 struct TranslationView: View {
@@ -9,6 +11,7 @@ struct TranslationView: View {
     @StateObject private var viewModel: TranslationViewModel
     @AppStorage("developerModeEnabled") private var developerModeEnabled: Bool = false
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     // #endregion
 
     // #region MARK: Init
@@ -35,100 +38,10 @@ struct TranslationView: View {
             )
             .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .bottom) {
-                    VStack(alignment: .trailing, spacing: -6) {
-                        Text("Pre-Babel Lens")
-                            .font(.system(size: 32, weight: .black, design: .serif))
-                            .minimumScaleFactor(0.8)
-                        Text("LOCAL LLM TRANSLATOR")
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .kerning(3)
-                            .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
-                    }
-                    Spacer()
-                    if viewModel.targetLanguageOptions.isEmpty {
-                        Text("No target languages")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Picker("Target", selection: $viewModel.targetLanguage) {
-                            ForEach(viewModel.targetLanguageOptions) { option in
-                                Text(option.menuLabel(showCode: developerModeEnabled)).tag(option.code)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                    Menu {
-                        Toggle("Developer Mode", isOn: $developerModeEnabled)
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundStyle(Color(red: 0.35, green: 0.42, blue: 0.34))
-                            .frame(width: 64, height: 64)
-                            .background(.white.opacity(0.85), in: Circle())
-                    }
-                    .menuStyle(.borderlessButton)
-                }
-                .padding(.top, 8)
-
-                HStack(alignment: .top, spacing: 18) {
-                    sourceCard
-                    outputCard
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
-                if developerModeEnabled {
-                    GroupBox("Process Mode") {
-                        Picker("Experiment", selection: $viewModel.experimentMode) {
-                            ForEach(TranslationExperimentMode.allCases) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-
-                    GroupBox("Glossary (source=target)") {
-                        TextEditor(text: $viewModel.glossaryText)
-                            .frame(minHeight: 80)
-                    }
-
-                    GroupBox("Indexes") {
-                        ScrollView {
-                            Text(indexesText)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .frame(minHeight: 140)
-                    }
-
-                    GroupBox {
-                        TextEditor(text: .constant(viewModel.developerLogsText))
-                            .font(.system(size: 12, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(minHeight: 120, maxHeight: 220)
-                            .scrollContentBackground(.hidden)
-                            .padding(8)
-                            .background(
-                                colorScheme == .dark ? Color.black.opacity(0.25) : Color.white.opacity(0.45),
-                                in: RoundedRectangle(cornerRadius: 12)
-                            )
-                    } label: {
-                        HStack {
-                            Text("Console")
-                            Spacer()
-                            Button("Clear") {
-                                viewModel.clearDeveloperLogs()
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(viewModel.developerLogs.isEmpty)
-                        }
-                    }
-                }
-            }
-            .padding(36)
-            .foregroundStyle(colorScheme == .dark ? .white : .primary)
+            contentLayout
+                .foregroundStyle(colorScheme == .dark ? .white : .primary)
         }
-        .frame(minWidth: 1000, minHeight: 680)
+        .frame(minHeight: 680)
         .task {
             #if os(macOS)
                 if viewModel.consumeLaunchActivationRequest() {
@@ -137,6 +50,175 @@ struct TranslationView: View {
             #endif
             await viewModel.translateIfNeededOnLaunch()
         }
+    }
+    // #endregion
+
+    // #region MARK: Layout
+    @ViewBuilder
+    private var contentLayout: some View {
+        #if os(iOS)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                mobileHeader
+
+                if isWideIOSLayout {
+                    HStack(alignment: .top, spacing: 14) {
+                        sourceCard
+                        outputCard
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 14) {
+                        sourceCard
+                        outputCard
+                    }
+                }
+
+                if developerModeEnabled {
+                    developerPanels
+                }
+            }
+            .padding(16)
+        }
+        .scrollDismissesKeyboard(.interactively)
+        #else
+        VStack(alignment: .leading, spacing: 18) {
+            desktopHeader
+
+            HStack(alignment: .top, spacing: 18) {
+                sourceCard
+                outputCard
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            if developerModeEnabled {
+                developerPanels
+            }
+        }
+        .padding(36)
+        .frame(minWidth: 1000)
+        #endif
+    }
+
+    @ViewBuilder
+    private var desktopHeader: some View {
+        HStack(alignment: .bottom) {
+            VStack(alignment: .trailing, spacing: -6) {
+                Text("Pre-Babel Lens")
+                    .font(.system(size: 32, weight: .black, design: .serif))
+                    .minimumScaleFactor(0.8)
+                Text("LOCAL LLM TRANSLATOR")
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .kerning(3)
+                    .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
+            }
+            Spacer()
+            languagePicker
+            settingsMenu(iconSize: 24, frameSize: 64)
+        }
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder
+    private var mobileHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center) {
+                Text("Pre-Babel Lens")
+                    .font(.system(size: 24, weight: .black, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer()
+                settingsMenu(iconSize: 18, frameSize: 40)
+            }
+            languagePicker
+        }
+    }
+
+    @ViewBuilder
+    private var languagePicker: some View {
+        if viewModel.targetLanguageOptions.isEmpty {
+            Text("No target languages")
+                .foregroundStyle(.secondary)
+        } else {
+            Picker("Target", selection: $viewModel.targetLanguage) {
+                ForEach(viewModel.targetLanguageOptions) { option in
+                    Text(option.menuLabel(showCode: developerModeEnabled)).tag(option.code)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+    }
+
+    @ViewBuilder
+    private func settingsMenu(iconSize: CGFloat, frameSize: CGFloat) -> some View {
+        Menu {
+            Toggle("Developer Mode", isOn: $developerModeEnabled)
+        } label: {
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: iconSize, weight: .semibold))
+                .foregroundStyle(Color(red: 0.35, green: 0.42, blue: 0.34))
+                .frame(width: frameSize, height: frameSize)
+                .background(.white.opacity(0.85), in: Circle())
+        }
+        #if os(macOS)
+        .menuStyle(.borderlessButton)
+        #endif
+    }
+
+    @ViewBuilder
+    private var developerPanels: some View {
+        GroupBox("Process Mode") {
+            Picker("Experiment", selection: $viewModel.experimentMode) {
+                ForEach(TranslationExperimentMode.allCases) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+
+        GroupBox("Glossary (source=target)") {
+            TextEditor(text: $viewModel.glossaryText)
+                .frame(minHeight: 80)
+        }
+
+        GroupBox("Indexes") {
+            ScrollView {
+                Text(indexesText)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(minHeight: 140)
+        }
+
+        GroupBox {
+            TextEditor(text: .constant(viewModel.developerLogsText))
+                .font(.system(size: 12, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(minHeight: 120, maxHeight: 220)
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .background(
+                    colorScheme == .dark ? Color.black.opacity(0.25) : Color.white.opacity(0.45),
+                    in: RoundedRectangle(cornerRadius: 12)
+                )
+        } label: {
+            HStack {
+                Text("Console")
+                Spacer()
+                Button("Clear") {
+                    viewModel.clearDeveloperLogs()
+                }
+                .buttonStyle(.bordered)
+                .disabled(viewModel.developerLogs.isEmpty)
+            }
+        }
+    }
+
+    private var isWideIOSLayout: Bool {
+        #if os(iOS)
+        horizontalSizeClass == .regular
+        #else
+        false
+        #endif
     }
     // #endregion
 
@@ -157,7 +239,7 @@ struct TranslationView: View {
 
             TextEditor(text: $viewModel.inputText)
                 .scrollContentBackground(.hidden)
-                .frame(minHeight: 300)
+                .frame(minHeight: editorMinHeight)
                 .padding(8)
                 .font(.body)
                 .background(
@@ -210,7 +292,7 @@ struct TranslationView: View {
                 }
                 .padding(12)
             }
-            .frame(minHeight: 300)
+            .frame(minHeight: editorMinHeight)
             .background(
                 colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.4),
                 in: RoundedRectangle(cornerRadius: 18)
@@ -246,6 +328,14 @@ struct TranslationView: View {
     }
     // #endregion
 
+    private var editorMinHeight: CGFloat {
+        #if os(iOS)
+        return 180
+        #else
+        return 300
+        #endif
+    }
+
     // #region MARK: Derived Text
     private var indexesText: String {
         [
@@ -274,6 +364,8 @@ struct TranslationView: View {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(viewModel.translatedText, forType: .string)
+        #elseif canImport(UIKit)
+            UIPasteboard.general.string = viewModel.translatedText
         #endif
     }
 
@@ -281,6 +373,10 @@ struct TranslationView: View {
         #if os(macOS)
             let pasteboard = NSPasteboard.general
             if let text = pasteboard.string(forType: .string), !text.isEmpty {
+                viewModel.inputText = text
+            }
+        #elseif canImport(UIKit)
+            if let text = UIPasteboard.general.string, !text.isEmpty {
                 viewModel.inputText = text
             }
         #endif

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="nav-controller">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--Navigation Controller-->
+        <scene sceneID="scene-nav">
+            <objects>
+                <navigationController id="nav-controller" sceneMemberID="viewController">
+                    <navigationBar key="navigationBar" contentMode="scaleToFill" id="nav-bar">
+                        <rect key="frame" x="0.0" y="118" width="393" height="54"/>
+                        <autoresizingMask key="autoresizingMask"/>
+                    </navigationBar>
+                    <connections>
+                        <segue destination="translation-vc" kind="relationship" relationship="rootViewController" id="root-segue"/>
+                    </connections>
+                </navigationController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="first-responder-nav" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="1002" y="125"/>
+        </scene>
+        <!--Pre-Babel Lens-->
+        <scene sceneID="scene-translation">
+            <objects>
+                <viewController id="translation-vc" customClass="TranslationViewController" customModule="PreBabelLensiOS" customModuleProvider="target" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" insetsLayoutMarginsFromSafeArea="NO" id="main-view">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" flexibleMinY="YES" heightSizable="YES" flexibleMaxY="YES"/>
+                        <subviews>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="fill" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="target-button">
+                                <rect key="frame" x="8" y="176" width="377" height="30"/>
+                                <state key="normal" title="Target Language"/>
+                            </button>
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" translatesAutoresizingMaskIntoConstraints="NO" id="source-text-view">
+                                <rect key="frame" x="8" y="218" width="377" height="232.66666666666663"/>
+                                <color key="backgroundColor" systemColor="secondarySystemBackgroundColor"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <textInputTraits key="textInputTraits"/>
+                            </textView>
+                            <stackView opaque="NO" contentMode="scaleToFill" distribution="fillEqually" spacing="8" translatesAutoresizingMaskIntoConstraints="NO" id="button-stack">
+                                <rect key="frame" x="8" y="458.66666666666669" width="377" height="30"/>
+                                <subviews>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="paste-button">
+                                        <rect key="frame" x="0.0" y="0.0" width="88.333333333333329" height="30"/>
+                                        <state key="normal" title="Paste"/>
+                                        <connections>
+                                            <action selector="tapPaste:" destination="translation-vc" eventType="touchUpInside" id="action-paste"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="clear-button">
+                                        <rect key="frame" x="96.333333333333343" y="0.0" width="88.333333333333343" height="30"/>
+                                        <state key="normal" title="Clear"/>
+                                        <connections>
+                                            <action selector="tapClear:" destination="translation-vc" eventType="touchUpInside" id="action-clear"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="copy-button">
+                                        <rect key="frame" x="192.66666666666666" y="0.0" width="87.999999999999972" height="30"/>
+                                        <state key="normal" title="Copy"/>
+                                        <connections>
+                                            <action selector="tapCopy:" destination="translation-vc" eventType="touchUpInside" id="action-copy"/>
+                                        </connections>
+                                    </button>
+                                    <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="translate-button">
+                                        <rect key="frame" x="288.66666666666669" y="0.0" width="88.333333333333314" height="30"/>
+                                        <state key="normal" title="Translate"/>
+                                        <connections>
+                                            <action selector="tapTranslate:" destination="translation-vc" eventType="touchUpInside" id="action-translate"/>
+                                        </connections>
+                                    </button>
+                                </subviews>
+                            </stackView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" text="Ready" textAlignment="natural" lineBreakMode="tailTruncation" numberOfLines="2" translatesAutoresizingMaskIntoConstraints="NO" id="status-label">
+                                <rect key="frame" x="8" y="492.66666666666669" width="377" height="17"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                                <color key="textColor" systemColor="secondaryLabelColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <textView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" editable="NO" translatesAutoresizingMaskIntoConstraints="NO" id="output-text-view">
+                                <rect key="frame" x="8" y="515.66666666666663" width="377" height="260.33333333333337"/>
+                                <color key="backgroundColor" systemColor="secondarySystemBackgroundColor"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <textInputTraits key="textInputTraits"/>
+                            </textView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="safe-area"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <constraints>
+                            <constraint firstItem="source-text-view" firstAttribute="top" secondItem="target-button" secondAttribute="bottom" constant="12" id="c1"/>
+                            <constraint firstItem="status-label" firstAttribute="top" secondItem="button-stack" secondAttribute="bottom" constant="4" id="c10"/>
+                            <constraint firstItem="status-label" firstAttribute="leading" secondItem="main-view" secondAttribute="leading" constant="8" id="c11"/>
+                            <constraint firstAttribute="trailing" secondItem="status-label" secondAttribute="trailing" constant="8" id="c12"/>
+                            <constraint firstItem="output-text-view" firstAttribute="top" secondItem="status-label" secondAttribute="bottom" constant="6" id="c13"/>
+                            <constraint firstItem="output-text-view" firstAttribute="leading" secondItem="main-view" secondAttribute="leading" constant="8" id="c14"/>
+                            <constraint firstAttribute="trailing" secondItem="output-text-view" secondAttribute="trailing" constant="8" id="c15"/>
+                            <constraint firstItem="safe-area" firstAttribute="bottom" secondItem="output-text-view" secondAttribute="bottom" constant="8" id="c16"/>
+                            <constraint firstItem="source-text-view" firstAttribute="height" secondItem="safe-area" secondAttribute="height" multiplier="0.38" id="c17"/>
+                            <constraint firstItem="target-button" firstAttribute="top" secondItem="safe-area" secondAttribute="top" constant="4" id="c2"/>
+                            <constraint firstItem="target-button" firstAttribute="leading" secondItem="main-view" secondAttribute="leading" constant="8" id="c3"/>
+                            <constraint firstAttribute="trailing" secondItem="target-button" secondAttribute="trailing" constant="8" id="c4"/>
+                            <constraint firstItem="source-text-view" firstAttribute="leading" secondItem="main-view" secondAttribute="leading" constant="8" id="c5"/>
+                            <constraint firstAttribute="trailing" secondItem="source-text-view" secondAttribute="trailing" constant="8" id="c6"/>
+                            <constraint firstItem="button-stack" firstAttribute="top" secondItem="source-text-view" secondAttribute="bottom" constant="8" id="c7"/>
+                            <constraint firstItem="button-stack" firstAttribute="leading" secondItem="main-view" secondAttribute="leading" constant="8" id="c8"/>
+                            <constraint firstAttribute="trailing" secondItem="button-stack" secondAttribute="trailing" constant="8" id="c9"/>
+                        </constraints>
+                    </view>
+                    <navigationItem key="navigationItem" title="Pre-Babel Lens" id="nav-item"/>
+                    <connections>
+                        <outlet property="outputTextView" destination="output-text-view" id="out-output"/>
+                        <outlet property="sourceTextView" destination="source-text-view" id="out-source"/>
+                        <outlet property="statusLabel" destination="status-label" id="out-status"/>
+                        <outlet property="targetLanguageButton" destination="target-button" id="out-target"/>
+                        <outlet property="translateButton" destination="translate-button" id="out-translate"/>
+                    </connections>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="first-responder-translation" userLabel="First Responder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="140" y="125"/>
+        </scene>
+    </scenes>
+    <resources>
+        <systemColor name="secondaryLabelColor">
+            <color red="0.23529411764705882" green="0.23529411764705882" blue="0.2627450980392157" alpha="0.59999999999999998" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="secondarySystemBackgroundColor">
+            <color red="0.94901960784313721" green="0.94901960784313721" blue="0.96862745098039216" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+        <systemColor name="systemBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+    </resources>
+</document>

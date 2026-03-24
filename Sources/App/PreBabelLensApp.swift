@@ -3,6 +3,7 @@ import SwiftUI
 import AppKit
 #endif
 
+#if os(macOS)
 @main
 struct PreBabelLens: App {
     private let viewModel: TranslationViewModel
@@ -36,10 +37,14 @@ struct PreBabelLens: App {
     }
 
     var body: some Scene {
+        #if os(macOS)
         mainScene
             .commands {
                 CommandGroup(replacing: .newItem) { }
             }
+        #else
+        mainScene
+        #endif
     }
 
     @SceneBuilder
@@ -50,7 +55,7 @@ struct PreBabelLens: App {
             translationRootView
         }
 #else
-        WindowGroup("Pre-Babel Lens", id: "main-window") {
+        WindowGroup {
             translationRootView
         }
 #endif
@@ -96,3 +101,4 @@ struct PreBabelLens: App {
     }
 #endif
 }
+#endif
