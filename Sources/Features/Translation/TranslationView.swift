@@ -344,6 +344,17 @@ struct TranslationView: View {
                     .padding(.bottom, 12 + outputStatusReservedHeight)
                 }
 
+                LinearGradient(
+                    colors: [
+                        outputStatusGradientTopColor,
+                        outputStatusBackgroundColor,
+                    ],
+                    startPoint: UnitPoint(x:0.0, y: 0.0),
+                    endPoint: UnitPoint(x:0.0, y: 0.75)
+                )
+                .frame(maxWidth: .infinity, minHeight: outputStatusBackgroundHeight, maxHeight: outputStatusBackgroundHeight, alignment: .bottom)
+                .allowsHitTesting(false)
+
                 outputStatusOverlay
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
@@ -434,7 +445,27 @@ struct TranslationView: View {
     }
     // #endregion
 
-    private var outputStatusReservedHeight: CGFloat { 34 }
+    private var outputStatusReservedHeight: CGFloat { 46 }
+    private var outputStatusBackgroundHeight: CGFloat { 84 }
+
+    private var outputStatusBackgroundColor: Color {
+        outputEditorBackgroundColor
+    }
+
+    private var outputStatusGradientTopColor: Color {
+        outputEditorBackgroundColor.opacity(0.0)
+    }
+
+    private var outputEditorBackgroundColor: Color {
+        if colorScheme == .dark {
+            return Color(red: 68.0 / 255.0, green: 71.0 / 255.0, blue: 79.0 / 255.0)
+        }
+        #if os(iOS)
+        return Color(red: 247.0 / 255.0, green: 238.0 / 255.0, blue: 225.0 / 255.0)
+        #else
+        return Color(red: 253.0 / 255.0, green: 251.0 / 255.0, blue: 247.0 / 255.0)
+        #endif
+    }
 
     @ViewBuilder
     private var outputStatusOverlay: some View {
