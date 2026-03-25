@@ -10,3 +10,5 @@ dist/
 .swiftpm/
 *.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
+**/xcuserdata/
+*.xcuserstate
