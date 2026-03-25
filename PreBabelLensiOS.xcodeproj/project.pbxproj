@@ -20,6 +20,7 @@
 		B00000000000000000000011 /* EnginePolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000B /* EnginePolicies.swift */; };
 		B00000000000000000000012 /* TranslationOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000C /* TranslationOrchestrator.swift */; };
 		B00000000000000000000013 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000013 /* LaunchScreen.storyboard */; };
+		B00000000000000000000014 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000014 /* Settings.bundle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +43,7 @@
 		F00000000000000000000011 /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = iOSApp/Base.lproj/Main.storyboard; sourceTree = SOURCE_ROOT; };
 		F00000000000000000000012 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/SceneDelegate.swift; sourceTree = SOURCE_ROOT; };
 		F00000000000000000000013 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = iOSApp/Base.lproj/LaunchScreen.storyboard; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000014 /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = iOSApp/Settings.bundle; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +93,7 @@
 				F00000000000000000000010 /* TranslationViewController.swift */,
 				F00000000000000000000011 /* Main.storyboard */,
 				F00000000000000000000013 /* LaunchScreen.storyboard */,
+				F00000000000000000000014 /* Settings.bundle */,
 			);
 			sourceTree = "<group>";
 		};
@@ -162,6 +165,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B00000000000000000000013 /* LaunchScreen.storyboard in Resources */,
+				B00000000000000000000014 /* Settings.bundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

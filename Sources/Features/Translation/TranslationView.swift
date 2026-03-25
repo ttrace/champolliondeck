@@ -22,40 +22,25 @@ struct TranslationView: View {
 
     // #region MARK: Body
     var body: some View {
-        GeometryReader { proxy in
-            contentLayout
-                .foregroundStyle(colorScheme == .dark ? .white : .primary)
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
-                .background(
-                    LinearGradient(
-                        colors: colorScheme == .dark
-                            ? [
-                                Color(red: 0.10, green: 0.12, blue: 0.14),
-                                Color(red: 0.16, green: 0.19, blue: 0.22),
-                            ]
-                            : [
-                                Color(red: 0.98, green: 0.92, blue: 0.82).opacity(0.98),
-                                Color(red: 0.93, green: 0.90, blue: 0.88).opacity(0.98),
-                            ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        contentLayout
+            .foregroundStyle(colorScheme == .dark ? .white : .primary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(
+                LinearGradient(
+                    colors: colorScheme == .dark
+                        ? [
+                            Color(red: 0.10, green: 0.12, blue: 0.14),
+                            Color(red: 0.16, green: 0.19, blue: 0.22),
+                        ]
+                        : [
+                            Color(red: 0.98, green: 0.92, blue: 0.82).opacity(0.98),
+                            Color(red: 0.93, green: 0.90, blue: 0.88).opacity(0.98),
+                        ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-                #if os(iOS)
-                .overlay(alignment: .bottomTrailing) {
-                    #if DEBUG
-                    Text(debugFrameText(proxySize: proxy.size))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.82))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.black.opacity(0.4), in: Capsule())
-                        .padding(8)
-                    #endif
-                }
-                #endif
-        }
-        .ignoresSafeArea()
+            )
+            .ignoresSafeArea()
         #if os(macOS)
         .frame(minHeight: 680)
         #endif
@@ -75,14 +60,6 @@ struct TranslationView: View {
     private var contentLayout: some View {
         #if os(iOS)
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Spacer()
-                settingsMenu(iconSize: 17, frameSize: 34)
-            }
-            .padding(.top, 2)
-
-            languagePicker
-
             if isWideIOSLayout {
                 HStack(alignment: .top, spacing: 14) {
                     sourceCard
@@ -101,7 +78,8 @@ struct TranslationView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.top, 48)
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         #else
         VStack(alignment: .leading, spacing: 18) {
@@ -158,6 +136,32 @@ struct TranslationView: View {
                 }
             }
             .pickerStyle(.menu)
+        }
+    }
+
+    @ViewBuilder
+    private var iOSLanguageMenu: some View {
+        if viewModel.targetLanguageOptions.isEmpty {
+            Text("No target")
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        } else {
+            Menu {
+                ForEach(viewModel.targetLanguageOptions) { option in
+                    Button(option.menuLabel(showCode: developerModeEnabled)) {
+                        viewModel.targetLanguage = option.code
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(currentTargetLanguageLabel)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+            }
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
@@ -286,6 +290,9 @@ struct TranslationView: View {
                 Text("Output")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                 Spacer()
+                #if os(iOS)
+                    iOSLanguageMenu
+                #endif
 
                 Button {
                     copyOutputToClipboard()
@@ -419,26 +426,12 @@ struct TranslationView: View {
     }
     // #endregion
 
-    #if os(iOS)
-    private func debugFrameText(proxySize: CGSize) -> String {
-        #if DEBUG
-        let screen = UIScreen.main.bounds.size
-        let idiom = UIDevice.current.userInterfaceIdiom == .phone ? "phone" : "pad"
-        let hClass = horizontalSizeClass == .regular ? "regular" : "compact"
-        return String(
-            format: "SWIFTUI-IOS %.0fx%.0f / screen %.0fx%.0f / %@ %@",
-            proxySize.width,
-            proxySize.height,
-            screen.width,
-            screen.height,
-            idiom,
-            hClass
-        )
-        #else
-        return ""
-        #endif
+    private var currentTargetLanguageLabel: String {
+        if let selected = viewModel.targetLanguageOptions.first(where: { $0.code == viewModel.targetLanguage }) {
+            return selected.menuLabel(showCode: developerModeEnabled)
+        }
+        return "Target"
     }
-    #endif
 
     // #region MARK: Clipboard Actions
     private func copyOutputToClipboard() {
