@@ -7,43 +7,43 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B00000000000000000000001 /* PreBabelLensApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000001 /* PreBabelLensApp.swift */; };
-		B00000000000000000000002 /* TranslationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000002 /* TranslationModels.swift */; };
-		B00000000000000000000003 /* TranslationProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000003 /* TranslationProtocols.swift */; };
-		B00000000000000000000004 /* DeterministicPreprocessEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000004 /* DeterministicPreprocessEngine.swift */; };
-		B00000000000000000000005 /* FoundationModelsTranslationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000005 /* FoundationModelsTranslationEngine.swift */; };
-		B00000000000000000000006 /* PlaceholderTranslationEngines.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000006 /* PlaceholderTranslationEngines.swift */; };
-		B00000000000000000000007 /* TranslationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000007 /* TranslationView.swift */; };
-		B00000000000000000000008 /* TranslationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000008 /* TranslationViewModel.swift */; };
-		B00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift */; };
-		B00000000000000000000010 /* ClipboardDoubleCopyDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000A /* ClipboardDoubleCopyDetector.swift */; };
-		B00000000000000000000011 /* EnginePolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000B /* EnginePolicies.swift */; };
-		B00000000000000000000012 /* TranslationOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000C /* TranslationOrchestrator.swift */; };
-		B00000000000000000000013 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000013 /* LaunchScreen.storyboard */; };
-		B00000000000000000000014 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000014 /* Settings.bundle */; };
+		B00000000000000000000001 /* Sources/App/PreBabelLensApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000001 /* Sources/App/PreBabelLensApp.swift */; };
+		B00000000000000000000002 /* Sources/Domain/TranslationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000002 /* Sources/Domain/TranslationModels.swift */; };
+		B00000000000000000000003 /* Sources/Domain/TranslationProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000003 /* Sources/Domain/TranslationProtocols.swift */; };
+		B00000000000000000000004 /* Sources/Engines/Preprocess/DeterministicPreprocessEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000004 /* Sources/Engines/Preprocess/DeterministicPreprocessEngine.swift */; };
+		B00000000000000000000005 /* Sources/Engines/Translation/FoundationModelsTranslationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000005 /* Sources/Engines/Translation/FoundationModelsTranslationEngine.swift */; };
+		B00000000000000000000006 /* Sources/Engines/Translation/PlaceholderTranslationEngines.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000006 /* Sources/Engines/Translation/PlaceholderTranslationEngines.swift */; };
+		B00000000000000000000007 /* Sources/Features/Translation/TranslationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000007 /* Sources/Features/Translation/TranslationView.swift */; };
+		B00000000000000000000008 /* Sources/Features/Translation/TranslationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000008 /* Sources/Features/Translation/TranslationViewModel.swift */; };
+		B00000000000000000000009 /* Sources/Services/AppleIntelligenceLanguageCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000009 /* Sources/Services/AppleIntelligenceLanguageCatalog.swift */; };
+		B00000000000000000000010 /* Sources/Services/ClipboardDoubleCopyDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000A /* Sources/Services/ClipboardDoubleCopyDetector.swift */; };
+		B00000000000000000000011 /* Sources/Services/EnginePolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000B /* Sources/Services/EnginePolicies.swift */; };
+		B00000000000000000000012 /* Sources/Services/TranslationOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000C /* Sources/Services/TranslationOrchestrator.swift */; };
+		B00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard */; };
+		B00000000000000000000014 /* iOSApp/Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000014 /* iOSApp/Settings.bundle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		F00000000000000000000001 /* PreBabelLensApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/PreBabelLensApp.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000002 /* TranslationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Domain/TranslationModels.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000003 /* TranslationProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Domain/TranslationProtocols.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000004 /* DeterministicPreprocessEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Engines/Preprocess/DeterministicPreprocessEngine.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000005 /* FoundationModelsTranslationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Engines/Translation/FoundationModelsTranslationEngine.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000006 /* PlaceholderTranslationEngines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Engines/Translation/PlaceholderTranslationEngines.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000007 /* TranslationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Features/Translation/TranslationView.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000008 /* TranslationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Features/Translation/TranslationViewModel.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/AppleIntelligenceLanguageCatalog.swift; sourceTree = SOURCE_ROOT; };
-		F0000000000000000000000A /* ClipboardDoubleCopyDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/ClipboardDoubleCopyDetector.swift; sourceTree = SOURCE_ROOT; };
-		F0000000000000000000000B /* EnginePolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/EnginePolicies.swift; sourceTree = SOURCE_ROOT; };
-		F0000000000000000000000C /* TranslationOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/TranslationOrchestrator.swift; sourceTree = SOURCE_ROOT; };
-		F0000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = iOSApp/Info.plist; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000001 /* Sources/App/PreBabelLensApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/PreBabelLensApp.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000002 /* Sources/Domain/TranslationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Domain/TranslationModels.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000003 /* Sources/Domain/TranslationProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Domain/TranslationProtocols.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000004 /* Sources/Engines/Preprocess/DeterministicPreprocessEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Engines/Preprocess/DeterministicPreprocessEngine.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000005 /* Sources/Engines/Translation/FoundationModelsTranslationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Engines/Translation/FoundationModelsTranslationEngine.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000006 /* Sources/Engines/Translation/PlaceholderTranslationEngines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Engines/Translation/PlaceholderTranslationEngines.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000007 /* Sources/Features/Translation/TranslationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Features/Translation/TranslationView.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000008 /* Sources/Features/Translation/TranslationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Features/Translation/TranslationViewModel.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000009 /* Sources/Services/AppleIntelligenceLanguageCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/AppleIntelligenceLanguageCatalog.swift; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000A /* Sources/Services/ClipboardDoubleCopyDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/ClipboardDoubleCopyDetector.swift; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000B /* Sources/Services/EnginePolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/EnginePolicies.swift; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000C /* Sources/Services/TranslationOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/TranslationOrchestrator.swift; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000D /* iOSApp/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = iOSApp/Info.plist; sourceTree = SOURCE_ROOT; };
 		F0000000000000000000000E /* PreBabelLensiOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PreBabelLensiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F0000000000000000000000F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/AppDelegate.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000010 /* TranslationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/TranslationViewController.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000011 /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = iOSApp/Base.lproj/Main.storyboard; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000012 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/SceneDelegate.swift; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000013 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = iOSApp/Base.lproj/LaunchScreen.storyboard; sourceTree = SOURCE_ROOT; };
-		F00000000000000000000014 /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = iOSApp/Settings.bundle; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000F /* iOSApp/AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/AppDelegate.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000010 /* iOSApp/TranslationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/TranslationViewController.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000011 /* iOSApp/Base.lproj/Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = iOSApp/Base.lproj/Main.storyboard; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000012 /* iOSApp/SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/SceneDelegate.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = iOSApp/Base.lproj/LaunchScreen.storyboard; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000014 /* iOSApp/Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = iOSApp/Settings.bundle; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,40 +60,40 @@
 		G00000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				G00000000000000000000002 /* Sources */,
-				G00000000000000000000003 /* iOSApp */,
+				G00000000000000000000002,
+				G00000000000000000000003,
 				G00000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		G00000000000000000000002 /* Sources */ = {
+		G00000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
-				F00000000000000000000001 /* PreBabelLensApp.swift */,
-				F00000000000000000000002 /* TranslationModels.swift */,
-				F00000000000000000000003 /* TranslationProtocols.swift */,
-				F00000000000000000000004 /* DeterministicPreprocessEngine.swift */,
-				F00000000000000000000005 /* FoundationModelsTranslationEngine.swift */,
-				F00000000000000000000006 /* PlaceholderTranslationEngines.swift */,
-				F00000000000000000000007 /* TranslationView.swift */,
-				F00000000000000000000008 /* TranslationViewModel.swift */,
-				F00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift */,
-				F0000000000000000000000A /* ClipboardDoubleCopyDetector.swift */,
-				F0000000000000000000000B /* EnginePolicies.swift */,
-				F0000000000000000000000C /* TranslationOrchestrator.swift */,
+				F00000000000000000000001 /* Sources/App/PreBabelLensApp.swift */,
+				F00000000000000000000002 /* Sources/Domain/TranslationModels.swift */,
+				F00000000000000000000003 /* Sources/Domain/TranslationProtocols.swift */,
+				F00000000000000000000004 /* Sources/Engines/Preprocess/DeterministicPreprocessEngine.swift */,
+				F00000000000000000000005 /* Sources/Engines/Translation/FoundationModelsTranslationEngine.swift */,
+				F00000000000000000000006 /* Sources/Engines/Translation/PlaceholderTranslationEngines.swift */,
+				F00000000000000000000007 /* Sources/Features/Translation/TranslationView.swift */,
+				F00000000000000000000008 /* Sources/Features/Translation/TranslationViewModel.swift */,
+				F00000000000000000000009 /* Sources/Services/AppleIntelligenceLanguageCatalog.swift */,
+				F0000000000000000000000A /* Sources/Services/ClipboardDoubleCopyDetector.swift */,
+				F0000000000000000000000B /* Sources/Services/EnginePolicies.swift */,
+				F0000000000000000000000C /* Sources/Services/TranslationOrchestrator.swift */,
 			);
 			sourceTree = "<group>";
 		};
-		G00000000000000000000003 /* iOSApp */ = {
+		G00000000000000000000003 = {
 			isa = PBXGroup;
 			children = (
-				F0000000000000000000000D /* Info.plist */,
-				F0000000000000000000000F /* AppDelegate.swift */,
-				F00000000000000000000012 /* SceneDelegate.swift */,
-				F00000000000000000000010 /* TranslationViewController.swift */,
-				F00000000000000000000011 /* Main.storyboard */,
-				F00000000000000000000013 /* LaunchScreen.storyboard */,
-				F00000000000000000000014 /* Settings.bundle */,
+				F0000000000000000000000D /* iOSApp/Info.plist */,
+				F0000000000000000000000F /* iOSApp/AppDelegate.swift */,
+				F00000000000000000000012 /* iOSApp/SceneDelegate.swift */,
+				F00000000000000000000010 /* iOSApp/TranslationViewController.swift */,
+				F00000000000000000000011 /* iOSApp/Base.lproj/Main.storyboard */,
+				F00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard */,
+				F00000000000000000000014 /* iOSApp/Settings.bundle */,
 			);
 			sourceTree = "<group>";
 		};
@@ -133,7 +133,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2600;
-				LastUpgradeCheck = 2600;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					T00000000000000000000001 = {
 						CreatedOnToolsVersion = 26.3;
@@ -150,6 +150,7 @@
 			);
 			mainGroup = G00000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
 			productRefGroup = G00000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -164,8 +165,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B00000000000000000000013 /* LaunchScreen.storyboard in Resources */,
-				B00000000000000000000014 /* Settings.bundle in Resources */,
+				B00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard in Resources */,
+				B00000000000000000000014 /* iOSApp/Settings.bundle in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -176,18 +177,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B00000000000000000000001 /* PreBabelLensApp.swift in Sources */,
-				B00000000000000000000002 /* TranslationModels.swift in Sources */,
-				B00000000000000000000003 /* TranslationProtocols.swift in Sources */,
-				B00000000000000000000004 /* DeterministicPreprocessEngine.swift in Sources */,
-				B00000000000000000000005 /* FoundationModelsTranslationEngine.swift in Sources */,
-				B00000000000000000000006 /* PlaceholderTranslationEngines.swift in Sources */,
-				B00000000000000000000007 /* TranslationView.swift in Sources */,
-				B00000000000000000000008 /* TranslationViewModel.swift in Sources */,
-				B00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift in Sources */,
-				B00000000000000000000010 /* ClipboardDoubleCopyDetector.swift in Sources */,
-				B00000000000000000000011 /* EnginePolicies.swift in Sources */,
-				B00000000000000000000012 /* TranslationOrchestrator.swift in Sources */,
+				B00000000000000000000001 /* Sources/App/PreBabelLensApp.swift in Sources */,
+				B00000000000000000000002 /* Sources/Domain/TranslationModels.swift in Sources */,
+				B00000000000000000000003 /* Sources/Domain/TranslationProtocols.swift in Sources */,
+				B00000000000000000000004 /* Sources/Engines/Preprocess/DeterministicPreprocessEngine.swift in Sources */,
+				B00000000000000000000005 /* Sources/Engines/Translation/FoundationModelsTranslationEngine.swift in Sources */,
+				B00000000000000000000006 /* Sources/Engines/Translation/PlaceholderTranslationEngines.swift in Sources */,
+				B00000000000000000000007 /* Sources/Features/Translation/TranslationView.swift in Sources */,
+				B00000000000000000000008 /* Sources/Features/Translation/TranslationViewModel.swift in Sources */,
+				B00000000000000000000009 /* Sources/Services/AppleIntelligenceLanguageCatalog.swift in Sources */,
+				B00000000000000000000010 /* Sources/Services/ClipboardDoubleCopyDetector.swift in Sources */,
+				B00000000000000000000011 /* Sources/Services/EnginePolicies.swift in Sources */,
+				B00000000000000000000012 /* Sources/Services/TranslationOrchestrator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -198,17 +199,34 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
@@ -216,9 +234,16 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -228,21 +253,45 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 			};
