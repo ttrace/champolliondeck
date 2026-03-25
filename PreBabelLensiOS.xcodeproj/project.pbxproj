@@ -1,0 +1,323 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B00000000000000000000001 /* PreBabelLensApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000001 /* PreBabelLensApp.swift */; };
+		B00000000000000000000002 /* TranslationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000002 /* TranslationModels.swift */; };
+		B00000000000000000000003 /* TranslationProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000003 /* TranslationProtocols.swift */; };
+		B00000000000000000000004 /* DeterministicPreprocessEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000004 /* DeterministicPreprocessEngine.swift */; };
+		B00000000000000000000005 /* FoundationModelsTranslationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000005 /* FoundationModelsTranslationEngine.swift */; };
+		B00000000000000000000006 /* PlaceholderTranslationEngines.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000006 /* PlaceholderTranslationEngines.swift */; };
+		B00000000000000000000007 /* TranslationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000007 /* TranslationView.swift */; };
+		B00000000000000000000008 /* TranslationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000008 /* TranslationViewModel.swift */; };
+		B00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift */; };
+		B00000000000000000000010 /* ClipboardDoubleCopyDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000A /* ClipboardDoubleCopyDetector.swift */; };
+		B00000000000000000000011 /* EnginePolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000B /* EnginePolicies.swift */; };
+		B00000000000000000000012 /* TranslationOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000C /* TranslationOrchestrator.swift */; };
+		B00000000000000000000013 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000013 /* LaunchScreen.storyboard */; };
+		B00000000000000000000014 /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000014 /* Settings.bundle */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		F00000000000000000000001 /* PreBabelLensApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/PreBabelLensApp.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000002 /* TranslationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Domain/TranslationModels.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000003 /* TranslationProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Domain/TranslationProtocols.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000004 /* DeterministicPreprocessEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Engines/Preprocess/DeterministicPreprocessEngine.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000005 /* FoundationModelsTranslationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Engines/Translation/FoundationModelsTranslationEngine.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000006 /* PlaceholderTranslationEngines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Engines/Translation/PlaceholderTranslationEngines.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000007 /* TranslationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Features/Translation/TranslationView.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000008 /* TranslationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Features/Translation/TranslationViewModel.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/AppleIntelligenceLanguageCatalog.swift; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000A /* ClipboardDoubleCopyDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/ClipboardDoubleCopyDetector.swift; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000B /* EnginePolicies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/EnginePolicies.swift; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000C /* TranslationOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/TranslationOrchestrator.swift; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = iOSApp/Info.plist; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000000E /* PreBabelLensiOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PreBabelLensiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F0000000000000000000000F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/AppDelegate.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000010 /* TranslationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/TranslationViewController.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000011 /* Main.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = iOSApp/Base.lproj/Main.storyboard; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000012 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/SceneDelegate.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000013 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = iOSApp/Base.lproj/LaunchScreen.storyboard; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000014 /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = iOSApp/Settings.bundle; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		P00000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		G00000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				G00000000000000000000002 /* Sources */,
+				G00000000000000000000003 /* iOSApp */,
+				G00000000000000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		G00000000000000000000002 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				F00000000000000000000001 /* PreBabelLensApp.swift */,
+				F00000000000000000000002 /* TranslationModels.swift */,
+				F00000000000000000000003 /* TranslationProtocols.swift */,
+				F00000000000000000000004 /* DeterministicPreprocessEngine.swift */,
+				F00000000000000000000005 /* FoundationModelsTranslationEngine.swift */,
+				F00000000000000000000006 /* PlaceholderTranslationEngines.swift */,
+				F00000000000000000000007 /* TranslationView.swift */,
+				F00000000000000000000008 /* TranslationViewModel.swift */,
+				F00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift */,
+				F0000000000000000000000A /* ClipboardDoubleCopyDetector.swift */,
+				F0000000000000000000000B /* EnginePolicies.swift */,
+				F0000000000000000000000C /* TranslationOrchestrator.swift */,
+			);
+			sourceTree = "<group>";
+		};
+		G00000000000000000000003 /* iOSApp */ = {
+			isa = PBXGroup;
+			children = (
+				F0000000000000000000000D /* Info.plist */,
+				F0000000000000000000000F /* AppDelegate.swift */,
+				F00000000000000000000012 /* SceneDelegate.swift */,
+				F00000000000000000000010 /* TranslationViewController.swift */,
+				F00000000000000000000011 /* Main.storyboard */,
+				F00000000000000000000013 /* LaunchScreen.storyboard */,
+				F00000000000000000000014 /* Settings.bundle */,
+			);
+			sourceTree = "<group>";
+		};
+		G00000000000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F0000000000000000000000E /* PreBabelLensiOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		T00000000000000000000001 /* PreBabelLensiOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000004 /* Build configuration list for PBXNativeTarget "PreBabelLensiOS" */;
+			buildPhases = (
+				P00000000000000000000003 /* Sources */,
+				P00000000000000000000001 /* Frameworks */,
+				P00000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PreBabelLensiOS;
+			productName = PreBabelLensiOS;
+			productReference = F0000000000000000000000E /* PreBabelLensiOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		R00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					T00000000000000000000001 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+				};
+			};
+			buildConfigurationList = C00000000000000000000001 /* Build configuration list for PBXProject "PreBabelLensiOS" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				ja,
+				Base,
+			);
+			mainGroup = G00000000000000000000001;
+			minimizedProjectReferenceProxies = 1;
+			productRefGroup = G00000000000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				T00000000000000000000001 /* PreBabelLensiOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		P00000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000013 /* LaunchScreen.storyboard in Resources */,
+				B00000000000000000000014 /* Settings.bundle in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		P00000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000001 /* PreBabelLensApp.swift in Sources */,
+				B00000000000000000000002 /* TranslationModels.swift in Sources */,
+				B00000000000000000000003 /* TranslationProtocols.swift in Sources */,
+				B00000000000000000000004 /* DeterministicPreprocessEngine.swift in Sources */,
+				B00000000000000000000005 /* FoundationModelsTranslationEngine.swift in Sources */,
+				B00000000000000000000006 /* PlaceholderTranslationEngines.swift in Sources */,
+				B00000000000000000000007 /* TranslationView.swift in Sources */,
+				B00000000000000000000008 /* TranslationViewModel.swift in Sources */,
+				B00000000000000000000009 /* AppleIntelligenceLanguageCatalog.swift in Sources */,
+				B00000000000000000000010 /* ClipboardDoubleCopyDetector.swift in Sources */,
+				B00000000000000000000011 /* EnginePolicies.swift in Sources */,
+				B00000000000000000000012 /* TranslationOrchestrator.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		C00000000000000000000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		C00000000000000000000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		C00000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = iOSApp/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ttrace.prebabellens.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C00000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = iOSApp/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ttrace.prebabellens.ios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C00000000000000000000001 /* Build configuration list for PBXProject "PreBabelLensiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000002 /* Debug */,
+				C00000000000000000000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C00000000000000000000004 /* Build configuration list for PBXNativeTarget "PreBabelLensiOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000005 /* Debug */,
+				C00000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = R00000000000000000000001 /* Project object */;
+}

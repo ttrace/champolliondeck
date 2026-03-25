@@ -36,10 +36,14 @@ struct PreBabelLens: App {
     }
 
     var body: some Scene {
+        #if os(macOS)
         mainScene
             .commands {
                 CommandGroup(replacing: .newItem) { }
             }
+        #else
+        mainScene
+        #endif
     }
 
     @SceneBuilder
@@ -50,7 +54,7 @@ struct PreBabelLens: App {
             translationRootView
         }
 #else
-        WindowGroup("Pre-Babel Lens", id: "main-window") {
+        WindowGroup {
             translationRootView
         }
 #endif
@@ -58,6 +62,10 @@ struct PreBabelLens: App {
 
     private var translationRootView: some View {
         TranslationView(viewModel: viewModel)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            #if os(macOS)
+            .background(WindowAppearanceConfigurator())
+            #endif
             .onOpenURL { url in
                 Task { @MainActor in
                     await viewModel.handleIncomingURL(url)
@@ -96,3 +104,34 @@ struct PreBabelLens: App {
     }
 #endif
 }
+
+#if os(macOS)
+private struct WindowAppearanceConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            configure(window: window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let window = nsView.window else { return }
+            configure(window: window)
+        }
+    }
+
+    private func configure(window: NSWindow) {
+        window.titlebarAppearsTransparent = true
+        window.toolbarStyle = .unified
+        window.backgroundColor = NSColor(
+            red: 0.98,
+            green: 0.92,
+            blue: 0.82,
+            alpha: 1.0
+        )
+    }
+}
+#endif
