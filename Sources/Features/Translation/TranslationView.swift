@@ -59,28 +59,36 @@ struct TranslationView: View {
     @ViewBuilder
     private var contentLayout: some View {
         #if os(iOS)
-        VStack(alignment: .leading, spacing: 14) {
-            if isWideIOSLayout {
-                HStack(alignment: .top, spacing: 14) {
-                    sourceCard
-                    outputCard
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 14) {
-                    sourceCard
-                    outputCard
-                }
-            }
+        GeometryReader { proxy in
+            let verticalGap: CGFloat = 14
+            let splitHeight = max(116, ((proxy.size.height - verticalGap) / 2) - 24)
 
-            if developerModeEnabled {
-                developerPanels
+            VStack(alignment: .leading, spacing: 14) {
+                if isWideIOSLayout {
+                    HStack(alignment: .top, spacing: 14) {
+                        sourceCard
+                        outputCard
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: verticalGap) {
+                        sourceCard
+                            .frame(height: splitHeight)
+                        outputCard
+                            .frame(height: splitHeight)
+                            .offset(y: -outputStatusReservedHeight)
+                    }
+                }
+
+                if developerModeEnabled {
+                    developerPanels
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.horizontal, 12)
+            .padding(.top, 48)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 12)
-        .padding(.top, 48)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         #else
         VStack(alignment: .leading, spacing: 18) {
             desktopHeader
@@ -256,7 +264,11 @@ struct TranslationView: View {
 
             TextEditor(text: $viewModel.inputText)
                 .scrollContentBackground(.hidden)
-                .frame(minHeight: editorMinHeight)
+                #if os(iOS)
+                .frame(maxHeight: .infinity, alignment: .top)
+                #else
+                .frame(height: editorMinHeight)
+                #endif
                 .padding(8)
                 .font(.body)
                 #if os(iOS)
@@ -271,6 +283,11 @@ struct TranslationView: View {
                     in: RoundedRectangle(cornerRadius: editorCornerRadius)
                 )
                 #endif
+
+            #if os(iOS)
+            Color.clear
+                .frame(height: outputStatusReservedHeight)
+            #endif
         }
         .padding(cardOuterPadding)
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -311,20 +328,32 @@ struct TranslationView: View {
                 .disabled(viewModel.isTranslating || viewModel.targetLanguageOptions.isEmpty)
             }
 
-            ScrollView {
-                Group {
-                    if viewModel.translatedText.isEmpty {
-                        Color.clear
-                            .frame(maxWidth: .infinity, minHeight: 1, alignment: .leading)
-                    } else {
-                        Text(viewModel.translatedText)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+            ZStack(alignment: .bottomLeading) {
+                ScrollView {
+                    Group {
+                        if viewModel.translatedText.isEmpty {
+                            Color.clear
+                                .frame(maxWidth: .infinity, minHeight: 1, alignment: .leading)
+                        } else {
+                            Text(viewModel.translatedText)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
+                    .padding(.top, 12)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12 + outputStatusReservedHeight)
                 }
-                .padding(12)
+
+                outputStatusOverlay
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
             }
-            .frame(minHeight: editorMinHeight)
+            #if os(iOS)
+            .frame(maxHeight: .infinity, alignment: .top)
+            #else
+            .frame(height: editorMinHeight)
+            #endif
             #if os(iOS)
             .background(colorScheme == .dark ? Color.black.opacity(0.24) : Color.white.opacity(0.30))
             .overlay(
@@ -337,27 +366,6 @@ struct TranslationView: View {
                 in: RoundedRectangle(cornerRadius: editorCornerRadius)
             )
             #endif
-
-            if let error = viewModel.errorMessage {
-                Text(error)
-                    .font(.body)
-                    .foregroundStyle(.red)
-            } else {
-                HStack(spacing: 10) {
-                    Text(viewModel.statusText)
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
-                    Spacer()
-                    if viewModel.isTranslating {
-                        Button {
-                            viewModel.stopTranslation()
-                        } label: {
-                            Label("Stop", systemImage: "stop.fill")
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
-            }
         }
         .padding(cardOuterPadding)
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -425,6 +433,34 @@ struct TranslationView: View {
         return timingTrace?.summary ?? "(n/a)"
     }
     // #endregion
+
+    private var outputStatusReservedHeight: CGFloat { 34 }
+
+    @ViewBuilder
+    private var outputStatusOverlay: some View {
+        if let error = viewModel.errorMessage {
+            Text(error)
+                .font(.footnote)
+                .foregroundStyle(.red)
+                .lineLimit(1)
+        } else {
+            HStack(spacing: 10) {
+                Text(viewModel.statusText)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if viewModel.isTranslating {
+                    Button {
+                        viewModel.stopTranslation()
+                    } label: {
+                        Label("Stop", systemImage: "stop.fill")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
 
     private var currentTargetLanguageLabel: String {
         if let selected = viewModel.targetLanguageOptions.first(where: { $0.code == viewModel.targetLanguage }) {

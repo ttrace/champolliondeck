@@ -220,24 +220,27 @@ enum SentenceSegmenter {
             let current = lines[cursor]
             if isDialogueLine(current) {
                 let end = runEnd(from: cursor, in: lines, where: isDialogueLine)
-                append(lines: lines, range: cursor..<end, kind: .dialogue, to: &segments)
-                cursor = end
+                let safeEnd = max(cursor + 1, min(end, lines.count))
+                append(lines: lines, start: cursor, end: safeEnd, kind: .dialogue, to: &segments)
+                cursor = safeEnd
                 continue
             }
 
             let uiLabelsEnd = runEnd(from: cursor, in: lines, where: isTwoWordsOrFewerLine)
             if uiLabelsEnd - cursor >= 2 {
-                append(lines: lines, range: cursor..<uiLabelsEnd, kind: .uiLabels, to: &segments)
-                cursor = uiLabelsEnd
+                let safeEnd = min(uiLabelsEnd, lines.count)
+                append(lines: lines, start: cursor, end: safeEnd, kind: .uiLabels, to: &segments)
+                cursor = safeEnd
                 continue
             }
 
             let shortNonPeriodEnd = runEnd(from: cursor, in: lines, where: isShortNonPeriodLine)
             if shortNonPeriodEnd > cursor {
-                let range = cursor..<shortNonPeriodEnd
+                let safeEnd = min(shortNonPeriodEnd, lines.count)
+                let range = cursor..<safeEnd
                 let kind: SegmentKind = range.count == 1 ? .heading : .lists
-                append(lines: lines, range: range, kind: kind, to: &segments)
-                cursor = shortNonPeriodEnd
+                append(lines: lines, start: range.lowerBound, end: range.upperBound, kind: kind, to: &segments)
+                cursor = safeEnd
                 continue
             }
 
@@ -256,8 +259,9 @@ enum SentenceSegmenter {
                 generalEnd += 1
             }
 
-            append(lines: lines, range: cursor..<generalEnd, kind: .general, to: &segments)
-            cursor = generalEnd
+            let safeEnd = max(cursor + 1, min(generalEnd, lines.count))
+            append(lines: lines, start: cursor, end: safeEnd, kind: .general, to: &segments)
+            cursor = safeEnd
         }
 
         return segments
@@ -265,10 +269,16 @@ enum SentenceSegmenter {
 
     private static func append(
         lines: [String],
-        range: Range<Int>,
+        start: Int,
+        end: Int,
         kind: SegmentKind,
         to segments: inout [KindedSegment]
     ) {
+        guard !lines.isEmpty else { return }
+        let safeStart = max(0, min(start, lines.count))
+        let safeEnd = max(safeStart, min(end, lines.count))
+        guard safeStart < safeEnd else { return }
+        let range = safeStart..<safeEnd
         let text = lines[range].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         segments.append(KindedSegment(text: text, kind: kind))
