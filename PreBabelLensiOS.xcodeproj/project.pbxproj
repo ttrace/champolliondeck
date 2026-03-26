@@ -21,6 +21,10 @@
 		B00000000000000000000012 /* Sources/Services/TranslationOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000C /* Sources/Services/TranslationOrchestrator.swift */; };
 		B00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard */; };
 		B00000000000000000000014 /* iOSApp/Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000014 /* iOSApp/Settings.bundle */; };
+		B00000000000000000000015 /* iOSApp/Shared/SharedImportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000015 /* iOSApp/Shared/SharedImportStore.swift */; };
+		B00000000000000000000016 /* iOSShareExtension/ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000018 /* iOSShareExtension/ShareViewController.swift */; };
+		B00000000000000000000017 /* iOSApp/Shared/SharedImportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000015 /* iOSApp/Shared/SharedImportStore.swift */; };
+		B00000000000000000000018 /* PreBabelLensShare.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001B /* PreBabelLensShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,6 +48,12 @@
 		F00000000000000000000012 /* iOSApp/SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/SceneDelegate.swift; sourceTree = SOURCE_ROOT; };
 		F00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = iOSApp/Base.lproj/LaunchScreen.storyboard; sourceTree = SOURCE_ROOT; };
 		F00000000000000000000014 /* iOSApp/Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = iOSApp/Settings.bundle; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000015 /* iOSApp/Shared/SharedImportStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSApp/Shared/SharedImportStore.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000016 /* iOSApp/PreBabelLensiOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = iOSApp/PreBabelLensiOS.entitlements; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000017 /* iOSShareExtension/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = iOSShareExtension/Info.plist; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000018 /* iOSShareExtension/ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSShareExtension/ShareViewController.swift; sourceTree = SOURCE_ROOT; };
+		F00000000000000000000019 /* iOSShareExtension/PreBabelLensShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = iOSShareExtension/PreBabelLensShare.entitlements; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000001B /* PreBabelLensShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PreBabelLensShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -54,7 +64,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		P00000000000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		P00000000000000000000004 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B00000000000000000000018 /* PreBabelLensShare.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXContainerItemProxy section */
+		X00000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = R00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = T00000000000000000000002;
+			remoteInfo = PreBabelLensShare;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXGroup section */
 		G00000000000000000000001 = {
@@ -88,12 +129,17 @@
 			isa = PBXGroup;
 			children = (
 				F0000000000000000000000D /* iOSApp/Info.plist */,
+				F00000000000000000000016 /* iOSApp/PreBabelLensiOS.entitlements */,
 				F0000000000000000000000F /* iOSApp/AppDelegate.swift */,
 				F00000000000000000000012 /* iOSApp/SceneDelegate.swift */,
 				F00000000000000000000010 /* iOSApp/TranslationViewController.swift */,
+				F00000000000000000000015 /* iOSApp/Shared/SharedImportStore.swift */,
 				F00000000000000000000011 /* iOSApp/Base.lproj/Main.storyboard */,
 				F00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard */,
 				F00000000000000000000014 /* iOSApp/Settings.bundle */,
+				F00000000000000000000017 /* iOSShareExtension/Info.plist */,
+				F00000000000000000000018 /* iOSShareExtension/ShareViewController.swift */,
+				F00000000000000000000019 /* iOSShareExtension/PreBabelLensShare.entitlements */,
 			);
 			sourceTree = "<group>";
 		};
@@ -101,6 +147,7 @@
 			isa = PBXGroup;
 			children = (
 				F0000000000000000000000E /* PreBabelLensiOS.app */,
+				F0000000000000000000001B /* PreBabelLensShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -115,15 +162,34 @@
 				P00000000000000000000003 /* Sources */,
 				P00000000000000000000001 /* Frameworks */,
 				P00000000000000000000002 /* Resources */,
+				P00000000000000000000004 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D00000000000000000000001 /* PBXTargetDependency */,
 			);
 			name = PreBabelLensiOS;
 			productName = PreBabelLensiOS;
 			productReference = F0000000000000000000000E /* PreBabelLensiOS.app */;
 			productType = "com.apple.product-type.application";
+		};
+		T00000000000000000000002 /* PreBabelLensShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C00000000000000000000007 /* Build configuration list for PBXNativeTarget "PreBabelLensShare" */;
+			buildPhases = (
+				P00000000000000000000007 /* Sources */,
+				P00000000000000000000005 /* Frameworks */,
+				P00000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PreBabelLensShare;
+			productName = PreBabelLensShare;
+			productReference = F0000000000000000000001B /* PreBabelLensShare.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -136,6 +202,9 @@
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					T00000000000000000000001 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					T00000000000000000000002 = {
 						CreatedOnToolsVersion = 26.3;
 					};
 				};
@@ -156,9 +225,18 @@
 			projectRoot = "";
 			targets = (
 				T00000000000000000000001 /* PreBabelLensiOS */,
+				T00000000000000000000002 /* PreBabelLensShare */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXTargetDependency section */
+		D00000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = T00000000000000000000002 /* PreBabelLensShare */;
+			targetProxy = X00000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXResourcesBuildPhase section */
 		P00000000000000000000002 /* Resources */ = {
@@ -167,6 +245,13 @@
 			files = (
 				B00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard in Resources */,
 				B00000000000000000000014 /* iOSApp/Settings.bundle in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		P00000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -189,6 +274,16 @@
 				B00000000000000000000010 /* Sources/Services/ClipboardDoubleCopyDetector.swift in Sources */,
 				B00000000000000000000011 /* Sources/Services/EnginePolicies.swift in Sources */,
 				B00000000000000000000012 /* Sources/Services/TranslationOrchestrator.swift in Sources */,
+				B00000000000000000000015 /* iOSApp/Shared/SharedImportStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		P00000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B00000000000000000000016 /* iOSShareExtension/ShareViewController.swift in Sources */,
+				B00000000000000000000017 /* iOSApp/Shared/SharedImportStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -300,6 +395,7 @@
 		C00000000000000000000005 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = iOSApp/PreBabelLensiOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -324,6 +420,7 @@
 		C00000000000000000000006 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = iOSApp/PreBabelLensiOS.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -338,6 +435,58 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ttrace.prebabellens.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		C00000000000000000000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = iOSShareExtension/PreBabelLensShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = iOSShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ttrace.prebabellens.ios.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C00000000000000000000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = iOSShareExtension/PreBabelLensShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = iOSShareExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ttrace.prebabellens.ios.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -362,6 +511,15 @@
 			buildConfigurations = (
 				C00000000000000000000005 /* Debug */,
 				C00000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C00000000000000000000007 /* Build configuration list for PBXNativeTarget "PreBabelLensShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C00000000000000000000008 /* Debug */,
+				C00000000000000000000009 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

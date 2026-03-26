@@ -2,6 +2,7 @@ import UIKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    private var pendingImportedText: String?
 
     func scene(
         _ scene: UIScene,
@@ -30,5 +31,47 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         self.window = window
         window.makeKeyAndVisible()
+        importSharedTextIfNeeded()
+    }
+
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        importSharedTextIfNeeded()
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let matchedURL = URLContexts.map(\.url).first(where: { $0.scheme == "prebabellens" }) else { return }
+        if let directText = parseSharedText(from: matchedURL), !directText.isEmpty {
+            pendingImportedText = directText
+        }
+        importSharedTextIfNeeded()
+    }
+
+    private func importSharedTextIfNeeded() {
+        if let text = SharedImportStore.consumePendingText() {
+            pendingImportedText = text
+        }
+
+        guard let text = pendingImportedText, !text.isEmpty else { return }
+        guard let controller = translationViewController else { return }
+        controller.applyImportedInput(text)
+        pendingImportedText = nil
+    }
+
+    private var translationViewController: TranslationViewController? {
+        if let navigationController = window?.rootViewController as? UINavigationController {
+            return navigationController.viewControllers.first as? TranslationViewController
+        }
+        return window?.rootViewController as? TranslationViewController
+    }
+
+    private func parseSharedText(from url: URL) -> String? {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let textItem = components.queryItems?.first(where: { $0.name == "text" }),
+              let value = textItem.value
+        else {
+            return nil
+        }
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? nil : normalized
     }
 }

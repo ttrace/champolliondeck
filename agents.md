@@ -234,3 +234,56 @@ Suggested next steps:
 2. Verify structured output stability with multiple target languages.
 3. Confirm session logs include kind and session prefix for retry cases.
 4. Optionally implement deterministic kind classifier in preprocess layer.
+
+## Session Handoff (2026-03-26)
+Current branch:
+- `feature/ios-support`
+
+Current product policy (important):
+- iPhone UI development is now SwiftUI-first.
+- iOS layout tuning is considered complete for current baseline.
+- Current focus is Share Panel (iOS Share Extension) integration and stabilization.
+- Keep macOS and iOS architecture aligned through shared domain/service layers.
+
+iOS UI policy:
+- Use full-screen layout.
+- Keep compact spacing and practical controls.
+- Preserve dark/light theme parity with macOS design direction.
+- Do not regress the finalized Source/Output split layout while implementing share features.
+
+Share Extension scope (current):
+- Extension target exists: `PreBabelLensShare`.
+- Goal: accept shared text/URL/file text and bring it into app Source field.
+- URL scheme route is already confirmed to work:
+  - `prebabellens://translate?text=...`
+  - `prebabellens://import-shared?text=...`
+- Remaining issue: Share Panel flow does not always deliver content into app Source after tapping post.
+
+Technical requirements for Share Panel work:
+- Keep extension lightweight; avoid heavy UI and avoid unrelated refactors.
+- Use App Group for shared storage:
+  - `group.com.ttrace.prebabellens`
+- Keep URL scheme handoff enabled:
+  - `prebabellens://import-shared`
+- Maintain fallback paths to maximize delivery reliability:
+  - App Group storage
+  - URL query handoff
+  - shared pasteboard fallback
+- Ensure Swift Concurrency safety:
+  - avoid non-Sendable crossing actor boundaries
+  - handle `SLComposeServiceViewController` main actor isolation correctly
+- Prefer observable failure paths (clear logs/error reporting) for share ingestion.
+
+Files currently central to Share Panel debugging:
+- `iOSShareExtension/ShareViewController.swift`
+- `iOSApp/Shared/SharedImportStore.swift`
+- `iOSApp/SceneDelegate.swift`
+- `iOSApp/TranslationViewController.swift`
+- `iOSApp/Info.plist`
+- `PreBabelLensiOS.xcodeproj/project.pbxproj`
+
+Near-term implementation priorities:
+1. Make Share Panel ingest reliable for Files/Safari/selected text workflows.
+2. Add visible diagnostics for successful/failed import path selection.
+3. Keep existing iOS SwiftUI layout behavior unchanged while fixing share intake.
+4. Verify signing/capabilities alignment for App + Extension (same team, App Group enabled).

@@ -28,6 +28,22 @@ final class TranslationViewController: UIViewController {
         configureUI()
         bindViewModel()
         refreshLanguageMenu()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        importSharedTextIfNeeded()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        importSharedTextIfNeeded()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     @IBAction private func tapTranslate(_ sender: UIButton) {
@@ -56,6 +72,24 @@ final class TranslationViewController: UIViewController {
         let text = outputTextView.text ?? ""
         guard !text.isEmpty else { return }
         UIPasteboard.general.string = text
+    }
+
+    @objc private func handleDidBecomeActive() {
+        importSharedTextIfNeeded()
+    }
+
+    func applyImportedInput(_ text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+        sourceTextView.text = normalized
+        viewModel.inputText = normalized
+        sourceTextView.becomeFirstResponder()
+        sourceTextView.selectedRange = NSRange(location: normalized.count, length: 0)
+    }
+
+    private func importSharedTextIfNeeded() {
+        guard let shared = SharedImportStore.consumePendingText() else { return }
+        applyImportedInput(shared)
     }
 
     private func configureUI() {
