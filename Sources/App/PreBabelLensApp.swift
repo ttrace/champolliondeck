@@ -88,7 +88,7 @@ struct PreBabelLens: App {
 #if os(macOS)
     @MainActor
     private static func activateExistingWindow() {
-        NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
         NSApp.activate(ignoringOtherApps: true)
 
         for window in NSApp.windows {

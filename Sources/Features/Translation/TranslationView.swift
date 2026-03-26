@@ -201,7 +201,9 @@ struct TranslationView: View {
     @ViewBuilder
     private func settingsMenu(iconSize: CGFloat, frameSize: CGFloat) -> some View {
         Menu {
+            #if os(iOS)
             Toggle(autoTranslateToggleTitle, isOn: $autoTranslateImportedTextEnabled)
+            #endif
             Toggle("Developer Mode", isOn: $developerModeEnabled)
         } label: {
             Image(systemName: "gearshape.fill")
