@@ -107,9 +107,6 @@ private enum FoundationModelsRuntimeTranslator {
             : input.segments
 
         let session = LanguageModelSession(instructions: instructions(for: input))
-        let sensitiveContentSession = LanguageModelSession(
-            instructions: sensitiveContentSafeInstructions(for: input)
-        )
         var outputs: [SegmentOutput] = []
         outputs.reserveCapacity(segments.count)
 
@@ -129,20 +126,21 @@ private enum FoundationModelsRuntimeTranslator {
                     onDiagnosticEvent: onDiagnosticEvent
                 )
             } catch {
-                if shouldRetryOrFallbackForGeneration(error) {
+                if isUnsafeContentError(error) {
                     onDiagnosticEvent?(
-                        "segment=\(segment.index), kind=\(segment.kind.rawValue): fallback-session-triggered (\(error.localizedDescription))"
+                        "segment=\(segment.index), kind=\(segment.kind.rawValue): unsafe-detected-source-returned (\(error.localizedDescription))"
                     )
-                    let safePrompt = promptForSensitiveContentSegment(segment, input: input)
-                    finalResult = await fallbackSafeSegmentTranslation(
-                        safePrompt: safePrompt,
-                        sourceText: segment.text,
-                        expectedTargetLanguage: input.targetLanguage,
-                        expectedKind: segment.kind,
-                        session: sensitiveContentSession,
-                        segmentIndex: segment.index,
-                        onPartialResult: onPartialResult,
-                        onDiagnosticEvent: onDiagnosticEvent
+                    finalResult = StructuredTranslationResult(
+                        translation: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                        kind: nil
+                    )
+                } else if shouldFallbackToSourceForGeneration(error) {
+                    onDiagnosticEvent?(
+                        "segment=\(segment.index), kind=\(segment.kind.rawValue): generation-error-source-returned (\(error.localizedDescription))"
+                    )
+                    finalResult = StructuredTranslationResult(
+                        translation: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                        kind: nil
                     )
                 } else {
                     throw error
@@ -393,18 +391,6 @@ private enum FoundationModelsRuntimeTranslator {
         """
     }
 
-    private static func sensitiveContentSafeInstructions(for input: TranslationInput) -> String {
-        """
-        You are a universal translation engine.
-        Translate from \(input.sourceLanguage) to \(input.targetLanguage).
-        The input can include politics, war, safety, or other sensitive topics.
-        Your role is strictly translation, not policy analysis.
-        Keep meaning and tone faithful.
-        Do not refuse, summarize, or add warnings.
-        If any part cannot be translated due to safety restrictions, keep only that part in the original language and annotate it with "原文ママ" inside "translation".
-        """
-    }
-
     private static func promptForSegment(_ segment: TextSegment, input: TranslationInput) -> String {
         var lines: [String] = []
         lines.append("Source text:")
@@ -434,30 +420,6 @@ private enum FoundationModelsRuntimeTranslator {
         return lines.joined(separator: "\n")
     }
 
-    private static func promptForSensitiveContentSegment(_ segment: TextSegment, input: TranslationInput) -> String {
-        var lines: [String] = []
-        lines.append("Task: direct translation only.")
-        lines.append("Source language: \(input.sourceLanguage)")
-        lines.append("Target language: \(input.targetLanguage)")
-        lines.append("")
-        lines.append("Source text:")
-        lines.append(segment.text)
-
-        if !input.protectedTokens.isEmpty {
-            let protectedList = input.protectedTokens
-                .map(\.value)
-                .joined(separator: ", ")
-            lines.append("")
-            lines.append("Protected tokens (do not translate): \(protectedList)")
-        }
-
-        lines.append("")
-        lines.append("Segment kind: \(segment.kind.rawValue)")
-        lines.append("Translate faithfully for this segment kind.")
-        lines.append("Important: translation must be translated source text, never the kind label itself.")
-        return lines.joined(separator: "\n")
-    }
-
     private static func strictPromptForSegment(
         sourceText: String,
         expectedTargetLanguage: String,
@@ -474,38 +436,6 @@ private enum FoundationModelsRuntimeTranslator {
         Source text:
         \(sourceText)
         """
-    }
-
-    private static func fallbackSafeSegmentTranslation(
-        safePrompt: String,
-        sourceText: String,
-        expectedTargetLanguage: String,
-        expectedKind: SegmentKind,
-        session: LanguageModelSession,
-        segmentIndex: Int,
-        onPartialResult: (@Sendable (_ segmentIndex: Int, _ partialTranslation: String) -> Void)?,
-        onDiagnosticEvent: (@Sendable (_ message: String) -> Void)?
-    ) async -> StructuredTranslationResult {
-        do {
-            return try await translateStructuredSegmentWithRetry(
-                prompt: safePrompt,
-                sourceText: sourceText,
-                expectedTargetLanguage: expectedTargetLanguage,
-                expectedKind: expectedKind,
-                using: session,
-                segmentIndex: segmentIndex,
-                onPartialResult: onPartialResult,
-                onDiagnosticEvent: onDiagnosticEvent
-            )
-        } catch {
-            onDiagnosticEvent?(
-                "segment=\(segmentIndex), kind=\(expectedKind.rawValue): fallback-failed-source-returned (\(error.localizedDescription))"
-            )
-            return StructuredTranslationResult(
-                translation: sourceText.trimmingCharacters(in: .whitespacesAndNewlines),
-                kind: nil
-            )
-        }
     }
 
     private static func validateStructuredTranslation(
@@ -543,6 +473,9 @@ private enum FoundationModelsRuntimeTranslator {
         guard !isPlaceholderTranslation(trimmed) else {
             throw FoundationModelsStructuredOutputError.placeholderTranslation(value: trimmed)
         }
+        guard !containsSourceAsIsAnnotation(trimmed) else {
+            throw FoundationModelsStructuredOutputError.sourceAsIsAnnotation(value: trimmed)
+        }
         return StructuredTranslationResult(
             translation: trimmed,
             kind: parsedKind
@@ -567,6 +500,10 @@ private enum FoundationModelsRuntimeTranslator {
     private static func isKindLabelTranslation(_ text: String) -> Bool {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return SegmentKind.allCases.map(\.rawValue).contains(normalized)
+    }
+
+    private static func containsSourceAsIsAnnotation(_ text: String) -> Bool {
+        text.contains("原文ママ")
     }
 
     private static func normalizedLanguageCode(_ raw: String) -> String {
@@ -595,7 +532,7 @@ private enum FoundationModelsRuntimeTranslator {
         }
     }
 
-    private static func shouldRetryOrFallbackForGeneration(_ error: Error) -> Bool {
+    private static func shouldFallbackToSourceForGeneration(_ error: Error) -> Bool {
         let nsError = error as NSError
         if nsError.domain.contains("FoundationModels.LanguageModelSession.GenerationError") {
             return true
@@ -609,10 +546,33 @@ private enum FoundationModelsRuntimeTranslator {
         }
 
         let localized = error.localizedDescription.lowercased()
-        return localized.contains("unsafe")
-            || localized.contains("safety")
-            || localized.contains("content")
+        return localized.contains("content")
             || localized.contains("policy")
+    }
+
+    private static func isUnsafeContentError(_ error: Error) -> Bool {
+        let localized = error.localizedDescription.lowercased()
+        if localized.contains("unsafe")
+            || localized.contains("safety")
+            || localized.contains("sensitive")
+            || localized.contains("harmful")
+            || localized.contains("violat")
+            || localized.contains("不適切")
+            || localized.contains("安全")
+            || localized.contains("有害")
+            || localized.contains("危険")
+        {
+            return true
+        }
+
+        let nsError = error as NSError
+        let domain = nsError.domain.lowercased()
+        if domain.contains("safety") || domain.contains("policy") || domain.contains("unsafe") {
+            return true
+        }
+
+        let reflectedType = String(reflecting: type(of: error)).lowercased()
+        return reflectedType.contains("safety") || reflectedType.contains("unsafe")
     }
 }
 
@@ -624,6 +584,7 @@ private enum FoundationModelsStructuredOutputError: LocalizedError {
     case emptyTranslation
     case kindLabelTranslation(value: String)
     case placeholderTranslation(value: String)
+    case sourceAsIsAnnotation(value: String)
 
     var isRetryable: Bool {
         switch self {
@@ -638,6 +599,8 @@ private enum FoundationModelsStructuredOutputError: LocalizedError {
         case .kindLabelTranslation:
             return true
         case .placeholderTranslation:
+            return true
+        case .sourceAsIsAnnotation:
             return true
         }
     }
@@ -656,6 +619,8 @@ private enum FoundationModelsStructuredOutputError: LocalizedError {
             return "Structured output translation was a kind label (\(value))."
         case .placeholderTranslation(let value):
             return "Structured output translation was placeholder text (\(value))."
+        case .sourceAsIsAnnotation(let value):
+            return "Structured output translation contained source-as-is annotation (\(value))."
         }
     }
 }
