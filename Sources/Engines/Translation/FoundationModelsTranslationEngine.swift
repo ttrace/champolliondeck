@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 struct FoundationModelsTranslationEngine: DiagnosticCapableTranslationEngine {
     var name: String {
@@ -112,6 +113,7 @@ private actor FoundationModelsTranslationGate {
 
 @available(macOS 26.0, iOS 26.0, *)
 private enum FoundationModelsRuntimeTranslator {
+    private static let lineBreakMarker = "</br>"
     private static let translationGate = FoundationModelsTranslationGate()
 
     @available(macOS 26.0, iOS 26.0, *)
@@ -121,7 +123,7 @@ private enum FoundationModelsRuntimeTranslator {
         var targetLanguage: String
         @Guide(description: "Segment kind label.")
         var kind: String
-        @Guide(description: "Translated text only.")
+        @Guide(description: "Translated text only. Preserve the line-break marker `</br>` as-is where line breaks are required.")
         var translation: String
     }
 
@@ -173,8 +175,10 @@ private enum FoundationModelsRuntimeTranslator {
                 }
 
                 let structuredKindLogValue = finalResult.kind?.rawValue ?? "n/a"
+                let inputSentenceCount = sentenceCountByNLTokenizer(segment.text)
+                let outputSentenceCount = sentenceCountByNLTokenizer(finalResult.translation)
                 onDiagnosticEvent?(
-                    "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue), structured-kind=\(structuredKindLogValue)"
+                    "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue), structured-kind=\(structuredKindLogValue), sentence-counts={input=\(inputSentenceCount), output=\(outputSentenceCount)}"
                 )
 
                 outputs.append(
@@ -320,6 +324,8 @@ private enum FoundationModelsRuntimeTranslator {
         You are a translation engine.
         Translate from \(input.sourceLanguage) to \(input.targetLanguage).
         Translate every sentence in the source text; do not omit any part.
+        STRICT REQUIREMENT: The translation must contain the same number of sentences as the source text.
+        Do not merge, split, summarize, or drop sentences.
         Preserve meaning and punctuation structure whenever possible.
         Do not include explanations, notes, or commentary.
         """
@@ -340,7 +346,7 @@ private enum FoundationModelsRuntimeTranslator {
     private static func promptForSegment(_ segment: TextSegment, input: TranslationInput) -> String {
         var lines: [String] = []
         lines.append("Source text:")
-        lines.append(segment.text)
+        lines.append(sourceTextForPrompt(segment.text))
 
         if !input.glossaryMatches.isEmpty {
             let glossaryLines = input.glossaryMatches
@@ -361,6 +367,7 @@ private enum FoundationModelsRuntimeTranslator {
         lines.append("")
         lines.append("Target language code: \(input.targetLanguage)")
         lines.append("Translate every sentence in the source text; do not omit any part.")
+        lines.append("STRICT REQUIREMENT: Keep the same number of sentences as the source text. Do not merge, split, summarize, or drop sentences.")
         lines.append("Important: translation must be translated source text, never the kind label itself.")
         return lines.joined(separator: "\n")
     }
@@ -372,7 +379,7 @@ private enum FoundationModelsRuntimeTranslator {
         lines.append("Target language: \(input.targetLanguage)")
         lines.append("")
         lines.append("Source text:")
-        lines.append(segment.text)
+        lines.append(sourceTextForPrompt(segment.text))
 
         if !input.protectedTokens.isEmpty {
             let protectedList = input.protectedTokens
@@ -384,6 +391,7 @@ private enum FoundationModelsRuntimeTranslator {
 
         lines.append("")
         lines.append("Translate every sentence in the source text; do not omit any part.")
+        lines.append("STRICT REQUIREMENT: Keep the same number of sentences as the source text. Do not merge, split, summarize, or drop sentences.")
         lines.append("Important: translation must be translated source text, never the kind label itself.")
         return lines.joined(separator: "\n")
     }
@@ -397,11 +405,12 @@ private enum FoundationModelsRuntimeTranslator {
         Rules:
         - target language: \(expectedTargetLanguage)
         - translate every sentence in the source text; do not omit any part
+        - keep the same number of sentences as the source text; do not merge, split, summarize, or drop sentences
         - output translation only, no notes or placeholders
         - translation must not be the kind label (for example: heading, general, dialogue, ui-labels, lists, codes_or_path)
 
         Source text:
-        \(sourceText)
+        \(sourceTextForPrompt(sourceText))
         """
     }
 
@@ -461,10 +470,42 @@ private enum FoundationModelsRuntimeTranslator {
         guard !isPlaceholderTranslation(trimmed) else {
             throw FoundationModelsStructuredOutputError.placeholderTranslation(value: trimmed)
         }
+        let normalizedTranslation = restoreLineBreakMarker(in: trimmed)
         return StructuredTranslationResult(
-            translation: trimmed,
+            translation: normalizedTranslation,
             kind: parsedKind
         )
+    }
+
+    private static func sourceTextForPrompt(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "\n", with: lineBreakMarker)
+    }
+
+    private static func restoreLineBreakMarker(in text: String) -> String {
+        let pattern = #"(?i)<\s*/?\s*br\s*/?\s*>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return text.replacingOccurrences(of: lineBreakMarker, with: "\n")
+        }
+        let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.stringByReplacingMatches(in: text, range: fullRange, withTemplate: "\n")
+    }
+
+    private static func sentenceCountByNLTokenizer(_ text: String) -> Int {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return 0 }
+
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = normalized
+
+        var count = 0
+        tokenizer.enumerateTokens(in: normalized.startIndex..<normalized.endIndex) { _, _ in
+            count += 1
+            return true
+        }
+        return max(1, count)
     }
 
     private static func isPlaceholderTranslation(_ text: String) -> Bool {
