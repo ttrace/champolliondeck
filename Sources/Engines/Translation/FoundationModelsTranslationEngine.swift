@@ -161,7 +161,7 @@ private enum FoundationModelsRuntimeTranslator {
                 : input.segments
 
             // Reuse one session per translation request to reduce per-segment setup overhead.
-            let session = LanguageModelSession(instructions: instructions(for: input))
+            var session = LanguageModelSession(instructions: instructions(for: input))
 
             var outputs: [SegmentOutput] = []
             outputs.reserveCapacity(segments.count)
@@ -185,13 +185,45 @@ private enum FoundationModelsRuntimeTranslator {
                 } catch is CancellationError {
                     throw CancellationError()
                 } catch {
-                    onDiagnosticEvent?(
-                        "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): no-retry-source-returned (\(error.localizedDescription))"
-                    )
-                    finalResult = StructuredTranslationResult(
-                        translation: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
-                        outputBreakTagCount: 0
-                    )
+                    if isContextWindowExceededError(error) {
+                        onDiagnosticEvent?(
+                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): context-window-exceeded-refresh-session-and-retry"
+                        )
+                        session = LanguageModelSession(instructions: instructions(for: input))
+                        do {
+                            finalResult = try await translateStructuredSegmentWithRetry(
+                                prompt: prompt,
+                                sourceText: segment.text,
+                                expectedTargetLanguage: input.targetLanguage,
+                                preprocessKind: segment.kind,
+                                using: session,
+                                segmentIndex: segment.index,
+                                onPartialResult: onPartialResult,
+                                onDiagnosticEvent: onDiagnosticEvent
+                            )
+                            onDiagnosticEvent?(
+                                "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): resumed-after-session-refresh"
+                            )
+                        } catch is CancellationError {
+                            throw CancellationError()
+                        } catch {
+                            onDiagnosticEvent?(
+                                "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): retry-after-session-refresh-failed-source-returned (\(error.localizedDescription))"
+                            )
+                            finalResult = StructuredTranslationResult(
+                                translation: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                                outputBreakTagCount: 0
+                            )
+                        }
+                    } else {
+                        onDiagnosticEvent?(
+                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): no-retry-source-returned (\(error.localizedDescription))"
+                        )
+                        finalResult = StructuredTranslationResult(
+                            translation: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                            outputBreakTagCount: 0
+                        )
+                    }
                 }
 
                 let inputSentenceCount = sentenceCountByNLTokenizer(segment.text)
@@ -582,6 +614,12 @@ private enum FoundationModelsRuntimeTranslator {
             || localized.contains("safety")
             || localized.contains("content")
             || localized.contains("policy")
+    }
+
+    private static func isContextWindowExceededError(_ error: Error) -> Bool {
+        let localized = error.localizedDescription.lowercased()
+        return localized.contains("context window")
+            || localized.contains("exceeded model context window size")
     }
 
     private static func sanitizedForLog(_ text: String?) -> String? {
