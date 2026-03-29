@@ -195,7 +195,13 @@ enum SentenceSegmenter {
             let range = ranges[idx]
             let nextStart = idx + 1 < ranges.count ? ranges[idx + 1].lowerBound : text.endIndex
             let joinerAfter = String(text[range.upperBound..<nextStart])
-            let sentenceText = String(text[range])
+            let sentenceText: String
+            if idx == 0 {
+                let leading = String(text[text.startIndex..<range.lowerBound])
+                sentenceText = leading + String(text[range])
+            } else {
+                sentenceText = String(text[range])
+            }
             units.append(SentenceUnit(text: sentenceText, joinerAfter: joinerAfter))
         }
 

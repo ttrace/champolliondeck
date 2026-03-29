@@ -121,15 +121,12 @@ private enum FoundationModelsRuntimeTranslator {
     struct StructuredTranslationPayload {
         @Guide(description: "Target language code.")
         var targetLanguage: String
-        @Guide(description: "Segment kind label.")
-        var kind: String
         @Guide(description: "Translated text only. Preserve the line-break marker `</br>` as-is where line breaks are required.")
         var translation: String
     }
 
     private struct StructuredTranslationResult {
         var translation: String
-        var kind: SegmentKind?
     }
 
     static func translate(
@@ -169,16 +166,14 @@ private enum FoundationModelsRuntimeTranslator {
                         "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): no-retry-source-returned (\(error.localizedDescription))"
                     )
                     finalResult = StructuredTranslationResult(
-                        translation: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
-                        kind: nil
+                        translation: segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
                     )
                 }
 
-                let structuredKindLogValue = finalResult.kind?.rawValue ?? "n/a"
                 let inputSentenceCount = sentenceCountByNLTokenizer(segment.text)
                 let outputSentenceCount = sentenceCountByNLTokenizer(finalResult.translation)
                 onDiagnosticEvent?(
-                    "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue), structured-kind=\(structuredKindLogValue), sentence-counts={input=\(inputSentenceCount), output=\(outputSentenceCount)}"
+                    "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue), sentence-counts={input=\(inputSentenceCount), output=\(outputSentenceCount)}"
                 )
 
                 outputs.append(
@@ -226,8 +221,7 @@ private enum FoundationModelsRuntimeTranslator {
                 "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): structured-output-no-retry-source-returned (\(error.localizedDescription))"
             )
             return StructuredTranslationResult(
-                translation: sourceText.trimmingCharacters(in: .whitespacesAndNewlines),
-                kind: nil
+                translation: sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
             )
         }
     }
@@ -249,7 +243,7 @@ private enum FoundationModelsRuntimeTranslator {
         if verboseLoggingEnabled {
             let translationForLog = sanitizedForLog(response.content.translation) ?? "(empty)"
             onDiagnosticEvent?(
-                "verbose model-output segment=\(segmentIndex), payload={targetLanguage=\(response.content.targetLanguage), kind=\(response.content.kind), translationChars=\(response.content.translation.count), translation=\(translationForLog)}"
+                "verbose model-output segment=\(segmentIndex), payload={targetLanguage=\(response.content.targetLanguage), translationChars=\(response.content.translation.count), translation=\(translationForLog)}"
             )
         }
         let result = try validateStructuredTranslation(
@@ -324,8 +318,6 @@ private enum FoundationModelsRuntimeTranslator {
         You are a translation engine.
         Translate from \(input.sourceLanguage) to \(input.targetLanguage).
         Translate every sentence in the source text; do not omit any part.
-        STRICT REQUIREMENT: The translation must contain the same number of sentences as the source text.
-        Do not merge, split, summarize, or drop sentences.
         Preserve meaning and punctuation structure whenever possible.
         Do not include explanations, notes, or commentary.
         """
@@ -367,8 +359,7 @@ private enum FoundationModelsRuntimeTranslator {
         lines.append("")
         lines.append("Target language code: \(input.targetLanguage)")
         lines.append("Translate every sentence in the source text; do not omit any part.")
-        lines.append("STRICT REQUIREMENT: Keep the same number of sentences as the source text. Do not merge, split, summarize, or drop sentences.")
-        lines.append("Important: translation must be translated source text, never the kind label itself.")
+        lines.append("Important: translation must be translated source text only.")
         return lines.joined(separator: "\n")
     }
 
@@ -391,8 +382,7 @@ private enum FoundationModelsRuntimeTranslator {
 
         lines.append("")
         lines.append("Translate every sentence in the source text; do not omit any part.")
-        lines.append("STRICT REQUIREMENT: Keep the same number of sentences as the source text. Do not merge, split, summarize, or drop sentences.")
-        lines.append("Important: translation must be translated source text, never the kind label itself.")
+        lines.append("Important: translation must be translated source text only.")
         return lines.joined(separator: "\n")
     }
 
@@ -440,8 +430,7 @@ private enum FoundationModelsRuntimeTranslator {
                 "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): fallback-failed-source-returned (\(error.localizedDescription))"
             )
             return StructuredTranslationResult(
-                translation: sourceText.trimmingCharacters(in: .whitespacesAndNewlines),
-                kind: nil
+                translation: sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
             )
         }
     }
@@ -458,22 +447,16 @@ private enum FoundationModelsRuntimeTranslator {
                 actual: actualCode
             )
         }
-        let parsedKind = parseSegmentKind(payload.kind)
-
         let trimmed = payload.translation.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw FoundationModelsStructuredOutputError.emptyTranslation
-        }
-        guard !isKindLabelTranslation(trimmed) else {
-            throw FoundationModelsStructuredOutputError.kindLabelTranslation(value: trimmed)
         }
         guard !isPlaceholderTranslation(trimmed) else {
             throw FoundationModelsStructuredOutputError.placeholderTranslation(value: trimmed)
         }
         let normalizedTranslation = restoreLineBreakMarker(in: trimmed)
         return StructuredTranslationResult(
-            translation: normalizedTranslation,
-            kind: parsedKind
+            translation: normalizedTranslation
         )
     }
 
@@ -523,35 +506,12 @@ private enum FoundationModelsRuntimeTranslator {
         return placeholders.contains(normalized)
     }
 
-    private static func isKindLabelTranslation(_ text: String) -> Bool {
-        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return SegmentKind.allCases.map(\.rawValue).contains(normalized)
-    }
-
     private static func normalizedLanguageCode(_ raw: String) -> String {
         raw
             .lowercased()
             .split(separator: "-")
             .first
             .map(String.init) ?? raw.lowercased()
-    }
-
-    private static func parseSegmentKind(_ raw: String) -> SegmentKind? {
-        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if let exact = SegmentKind(rawValue: normalized) {
-            return exact
-        }
-
-        switch normalized {
-        case "ui_labels", "ui-label", "ui_label":
-            return .uiLabels
-        case "list", "list-item", "list_item":
-            return .lists
-        case "code_or_path", "code-path", "code_or_paths", "codes_or_paths":
-            return .codesOrPath
-        default:
-            return nil
-        }
     }
 
     private static func shouldRetryOrFallbackForGeneration(_ error: Error) -> Bool {
@@ -601,7 +561,6 @@ private enum FoundationModelsStructuredOutputError: LocalizedError {
     case invalidFormat(content: String)
     case targetLanguageMismatch(expected: String, actual: String)
     case emptyTranslation
-    case kindLabelTranslation(value: String)
     case placeholderTranslation(value: String)
 
     var isRetryable: Bool {
@@ -611,8 +570,6 @@ private enum FoundationModelsStructuredOutputError: LocalizedError {
         case .targetLanguageMismatch:
             return true
         case .emptyTranslation:
-            return true
-        case .kindLabelTranslation:
             return true
         case .placeholderTranslation:
             return true
@@ -627,8 +584,6 @@ private enum FoundationModelsStructuredOutputError: LocalizedError {
             return "Structured output target mismatch. expected=\(expected), actual=\(actual)"
         case .emptyTranslation:
             return "Structured output translation was empty."
-        case .kindLabelTranslation(let value):
-            return "Structured output translation was a kind label (\(value))."
         case .placeholderTranslation(let value):
             return "Structured output translation was placeholder text (\(value))."
         }
