@@ -139,7 +139,7 @@ private enum FoundationModelsRuntimeTranslator {
     struct StructuredTranslationPayload {
         @Guide(description: "Target language code.")
         var targetLanguage: String
-        @Guide(description: "Translated HTML-like text only in the language specified by `targetLanguage`. Keep the same sentence count as the source text. Preserve every `</br>` token in output and do not replace or remove it.")
+        @Guide(description: "Translated HTML-like text only in the language specified by `targetLanguage`. Keep the same sentence count as the source text. STYLE REQUIREMENT: Preserve all `</br>` tokens exactly as in source (same count and order).")
         var translation: String
     }
 
@@ -169,7 +169,7 @@ private enum FoundationModelsRuntimeTranslator {
             for segment in segments {
                 try Task.checkCancellation()
                 let prompt = promptForSegment(segment, input: input)
-                let finalResult: StructuredTranslationResult
+                var finalResult: StructuredTranslationResult
 
                 do {
                     finalResult = try await translateStructuredSegmentWithRetry(
@@ -227,7 +227,39 @@ private enum FoundationModelsRuntimeTranslator {
                 }
 
                 let inputSentenceCount = sentenceCountByNLTokenizer(segment.text)
-                let outputSentenceCount = sentenceCountByNLTokenizer(finalResult.translation)
+                var outputSentenceCount = sentenceCountByNLTokenizer(finalResult.translation)
+                if shouldRetryForSentenceDrop(
+                    inputSentenceCount: inputSentenceCount,
+                    outputSentenceCount: outputSentenceCount
+                ) {
+                    onDiagnosticEvent?(
+                        "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): sentence-count-drop-detected retry-once"
+                    )
+                    do {
+                        let retrySession = LanguageModelSession(instructions: instructions(for: input))
+                        let retryResult = try await translateStructuredSegmentWithRetry(
+                            prompt: prompt,
+                            sourceText: segment.text,
+                            expectedTargetLanguage: input.targetLanguage,
+                            preprocessKind: segment.kind,
+                            using: retrySession,
+                            segmentIndex: segment.index,
+                            onPartialResult: onPartialResult,
+                            onDiagnosticEvent: onDiagnosticEvent
+                        )
+                        finalResult = retryResult
+                        outputSentenceCount = sentenceCountByNLTokenizer(finalResult.translation)
+                        onDiagnosticEvent?(
+                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): sentence-count-retry-finished"
+                        )
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        onDiagnosticEvent?(
+                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): sentence-count-retry-failed-keep-first (\(error.localizedDescription))"
+                        )
+                    }
+                }
                 let inputBreakCount = lineBreakTagCount(in: sourceTextForPrompt(segment.text))
                 let outputBreakCount = finalResult.outputBreakTagCount
                 onDiagnosticEvent?(
@@ -378,7 +410,8 @@ private enum FoundationModelsRuntimeTranslator {
         Translate from \(input.sourceLanguage) to \(input.targetLanguage).
         Translate every sentence in the source text; do not omit any part.
         Keep the same number of sentences as the source text.
-        Treat the source as HTML-like text and preserve every `</br>` token in output.
+        Treat the source as HTML-like text.
+        STRICT REQUIREMENT: Preserve all `</br>` tokens exactly as in source (same count and order). Do not replace, remove, or add `</br>`.
         Preserve meaning and punctuation structure whenever possible.
         Do not include explanations, notes, or commentary.
         """
@@ -398,8 +431,12 @@ private enum FoundationModelsRuntimeTranslator {
 
     private static func promptForSegment(_ segment: TextSegment, input: TranslationInput) -> String {
         var lines: [String] = []
-        lines.append("Source text:")
-        lines.append(sourceTextForPrompt(segment.text))
+        lines.append("Target language code: \(input.targetLanguage)")
+        lines.append("The source is HTML-like text.")
+        lines.append("STYLE REQUIREMENT: Preserve all `</br>` tokens exactly as in source (same count and order).")
+        lines.append("Translate every sentence in the source text; do not omit any part.")
+        lines.append("Keep the same number of sentences as the source text.")
+        lines.append("Important: translation must be translated source text only.")
 
         if !input.glossaryMatches.isEmpty {
             let glossaryLines = input.glossaryMatches
@@ -418,12 +455,8 @@ private enum FoundationModelsRuntimeTranslator {
         }
 
         lines.append("")
-        lines.append("Target language code: \(input.targetLanguage)")
-        lines.append("The source is HTML-like text.")
-        lines.append("Preserve every `</br>` token in output. Do not replace or remove it.")
-        lines.append("Translate every sentence in the source text; do not omit any part.")
-        lines.append("Keep the same number of sentences as the source text.")
-        lines.append("Important: translation must be translated source text only.")
+        lines.append("Source text:")
+        lines.append(sourceTextForPrompt(segment.text))
         return lines.joined(separator: "\n")
     }
 
@@ -432,9 +465,6 @@ private enum FoundationModelsRuntimeTranslator {
         lines.append("Task: direct translation only.")
         lines.append("Source language: \(input.sourceLanguage)")
         lines.append("Target language: \(input.targetLanguage)")
-        lines.append("")
-        lines.append("Source text:")
-        lines.append(sourceTextForPrompt(segment.text))
 
         if !input.protectedTokens.isEmpty {
             let protectedList = input.protectedTokens
@@ -446,10 +476,13 @@ private enum FoundationModelsRuntimeTranslator {
 
         lines.append("")
         lines.append("The source is HTML-like text.")
-        lines.append("Preserve every `</br>` token in output. Do not replace or remove it.")
+        lines.append("STRICT REQUIREMENT: Preserve all `</br>` tokens exactly as in source (same count and order). Do not replace, remove, or add `</br>`.")
         lines.append("Translate every sentence in the source text; do not omit any part.")
         lines.append("Keep the same number of sentences as the source text.")
         lines.append("Important: translation must be translated source text only.")
+        lines.append("")
+        lines.append("Source text:")
+        lines.append(sourceTextForPrompt(segment.text))
         return lines.joined(separator: "\n")
     }
 
@@ -462,7 +495,8 @@ private enum FoundationModelsRuntimeTranslator {
         Rules:
         - target language: \(expectedTargetLanguage)
         - source is HTML-like text
-        - preserve every `</br>` token in output; do not replace or remove it
+        - STRICT REQUIREMENT: preserve all `</br>` tokens exactly as in source (same count and order)
+        - do not replace, remove, or add `</br>`
         - translate every sentence in the source text; do not omit any part
         - keep the same number of sentences as the source text; do not merge, split, summarize, or drop sentences
         - output translation only, no notes or placeholders
@@ -521,11 +555,12 @@ private enum FoundationModelsRuntimeTranslator {
         guard !trimmed.isEmpty else {
             throw FoundationModelsStructuredOutputError.emptyTranslation
         }
-        guard !isPlaceholderTranslation(trimmed) else {
-            throw FoundationModelsStructuredOutputError.placeholderTranslation(value: trimmed)
+        let sanitized = sanitizeStructuredLeakage(in: trimmed)
+        guard !isPlaceholderTranslation(sanitized) else {
+            throw FoundationModelsStructuredOutputError.placeholderTranslation(value: sanitized)
         }
-        let outputBreakTagCount = lineBreakTagCount(in: trimmed)
-        let normalizedTranslation = normalizeBreakTagsToNewline(in: trimmed)
+        let outputBreakTagCount = lineBreakTagCount(in: sanitized)
+        let normalizedTranslation = normalizeBreakTagsToNewline(in: sanitized)
         return StructuredTranslationResult(
             translation: normalizedTranslation,
             outputBreakTagCount: outputBreakTagCount
@@ -554,23 +589,56 @@ private enum FoundationModelsRuntimeTranslator {
         return max(1, count)
     }
 
-    private static func normalizeBreakTagsToNewline(in text: String) -> String {
-        let pattern = #"(?i)<\s*/?\s*br\s*/?\s*>"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-            return text
+    private static func shouldRetryForSentenceDrop(
+        inputSentenceCount: Int,
+        outputSentenceCount: Int
+    ) -> Bool {
+        guard inputSentenceCount > 0 else { return false }
+        if inputSentenceCount == 2 && outputSentenceCount == 1 {
+            return false
         }
-        let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
-        return regex.stringByReplacingMatches(in: text, range: fullRange, withTemplate: "\n")
+        return outputSentenceCount * 2 < inputSentenceCount
+    }
+
+    private static func normalizeBreakTagsToNewline(in text: String) -> String {
+        var normalized = text
+        normalized = replaceRegex(
+            pattern: #"(?i)</\s*p\s*>\s*<\s*p(?:\s+[^>]*)?\s*>"#,
+            in: normalized,
+            with: "\n"
+        )
+        normalized = replaceRegex(
+            pattern: #"(?i)</\s*p\s*>"#,
+            in: normalized,
+            with: "\n"
+        )
+        normalized = replaceRegex(
+            pattern: #"(?i)<\s*p(?:\s+[^>]*)?\s*>"#,
+            in: normalized,
+            with: ""
+        )
+        normalized = replaceRegex(
+            pattern: #"(?i)<\s*/?\s*br(?:\s*/)?\s*>"#,
+            in: normalized,
+            with: "\n"
+        )
+        return normalized
     }
 
     private static func lineBreakTagCount(in text: String) -> Int {
         guard !text.isEmpty else { return 0 }
-        let pattern = #"(?i)<\s*/?\s*br\s*/?\s*>"#
+        let pattern = #"(?i)(<\s*/?\s*br(?:\s*/)?\s*>|</\s*p\s*>\s*<\s*p(?:\s+[^>]*)?\s*>|</\s*p\s*>)"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else {
             return 0
         }
         let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
         return regex.numberOfMatches(in: text, range: fullRange)
+    }
+
+    private static func replaceRegex(pattern: String, in text: String, with replacement: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.stringByReplacingMatches(in: text, range: fullRange, withTemplate: replacement)
     }
 
     private static func isPlaceholderTranslation(_ text: String) -> Bool {
@@ -586,6 +654,21 @@ private enum FoundationModelsRuntimeTranslator {
             "{translation}",
         ]
         return placeholders.contains(normalized)
+    }
+
+    private static func sanitizeStructuredLeakage(in text: String) -> String {
+        // Guard against occasional structured-output collapse where extra JSON/meta text
+        // leaks into `translation` (for example: ..."}Author2024-...).
+        let leakagePattern = #"(?:\"|”)?\}\s*[\p{L}\p{N}]"#
+        guard let leakageRange = text.range(of: leakagePattern, options: .regularExpression) else {
+            return text
+        }
+
+        let head = String(text[..<leakageRange.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"”"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return head
     }
 
     private static func normalizedLanguageCode(_ raw: String) -> String {

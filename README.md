@@ -119,6 +119,35 @@ The Translation screen can show the following analysis values:
 - `Ambiguity hints`: Count of ambiguity warnings detected in preprocessing.
 - `Trace steps`: Number of preprocessing trace entries recorded for the request.
 
+## Translation Failure Handling
+
+When a segment cannot be translated cleanly, the Foundation Models engine applies the following recovery flow:
+
+1. Normal segment translation:
+   - Each segment is translated with structured output (`targetLanguage`, `translation`).
+2. Context window overflow:
+   - If an error contains `Exceeded model context window size`, the engine recreates `LanguageModelSession` and retries that segment once.
+   - If retry succeeds, translation continues.
+   - If retry fails, the segment falls back to source text.
+3. Sentence-drop safeguard:
+   - After translation, sentence counts are compared (`input` vs `output`).
+   - If `output < input/2`, the segment is retried once with a fresh session.
+   - Exception: `2 -> 1` is explicitly allowed.
+   - If retry fails, the first translation result is kept.
+4. Structured-output mismatch:
+   - If structured output validation fails (for example target language mismatch / empty / placeholder), the segment falls back to source text.
+5. Cancellation handling:
+   - Cancellation is propagated immediately (not converted to source fallback), so stopped jobs can drain cleanly.
+
+Developer Console diagnostics include:
+- `context-window-exceeded-refresh-session-and-retry`
+- `resumed-after-session-refresh`
+- `retry-after-session-refresh-failed-source-returned`
+- `sentence-count-drop-detected retry-once`
+- `sentence-count-retry-finished`
+- `sentence-count-retry-failed-keep-first`
+- `structured-output-no-retry-source-returned`
+
 ## License
 
 This project is licensed under the MIT License. See `LICENSE`.
