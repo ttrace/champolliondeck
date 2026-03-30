@@ -139,7 +139,7 @@ private enum FoundationModelsRuntimeTranslator {
     struct StructuredTranslationPayload {
         @Guide(description: "Target language code.")
         var targetLanguage: String
-        @Guide(description: "Translated HTML-like text only in the language specified by `targetLanguage`. Keep the same sentence count as the source text. STYLE REQUIREMENT: Preserve all `</br>` tokens exactly as in source (same count and order).")
+        @Guide(description: "Translated HTML-like text only in the language specified by `targetLanguage`. Keep the same sentence count as the source text. STYLE REQUIREMENT: Preserve all `</br>` tokens exactly as in source (same count, same position even on the line head).")
         var translation: String
     }
 
@@ -170,6 +170,7 @@ private enum FoundationModelsRuntimeTranslator {
                 try Task.checkCancellation()
                 let prompt = promptForSegment(segment, input: input)
                 var finalResult: StructuredTranslationResult
+                var shouldSkipSentenceDropRetry = false
 
                 do {
                     finalResult = try await translateStructuredSegmentWithRetry(
@@ -185,7 +186,19 @@ private enum FoundationModelsRuntimeTranslator {
                 } catch is CancellationError {
                     throw CancellationError()
                 } catch {
-                    if isContextWindowExceededError(error) {
+                    if isUnsafeContentError(error) {
+                        shouldSkipSentenceDropRetry = true
+                        onDiagnosticEvent?(
+                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): unsafe-no-retry-source-returned (\(error.localizedDescription))"
+                        )
+                        finalResult = StructuredTranslationResult(
+                            translation: sourceFallbackTranslation(
+                                sourceText: segment.text,
+                                error: error
+                            ),
+                            outputBreakTagCount: 0
+                        )
+                    } else if isContextWindowExceededError(error) {
                         onDiagnosticEvent?(
                             "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): context-window-exceeded-refresh-session-and-retry"
                         )
@@ -207,11 +220,15 @@ private enum FoundationModelsRuntimeTranslator {
                         } catch is CancellationError {
                             throw CancellationError()
                         } catch {
+                            shouldSkipSentenceDropRetry = isUnsafeContentError(error)
                             onDiagnosticEvent?(
                                 "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): retry-after-session-refresh-failed-source-returned (\(error.localizedDescription))"
                             )
                             finalResult = StructuredTranslationResult(
-                                translation: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                                translation: sourceFallbackTranslation(
+                                    sourceText: segment.text,
+                                    error: error
+                                ),
                                 outputBreakTagCount: 0
                             )
                         }
@@ -220,7 +237,10 @@ private enum FoundationModelsRuntimeTranslator {
                             "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): no-retry-source-returned (\(error.localizedDescription))"
                         )
                         finalResult = StructuredTranslationResult(
-                            translation: segment.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                            translation: sourceFallbackTranslation(
+                                sourceText: segment.text,
+                                error: error
+                            ),
                             outputBreakTagCount: 0
                         )
                     }
@@ -228,7 +248,7 @@ private enum FoundationModelsRuntimeTranslator {
 
                 let inputSentenceCount = sentenceCountByNLTokenizer(segment.text)
                 var outputSentenceCount = sentenceCountByNLTokenizer(finalResult.translation)
-                if shouldRetryForSentenceDrop(
+                if !shouldSkipSentenceDropRetry && shouldRetryForSentenceDrop(
                     inputSentenceCount: inputSentenceCount,
                     outputSentenceCount: outputSentenceCount
                 ) {
@@ -311,7 +331,10 @@ private enum FoundationModelsRuntimeTranslator {
                 "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): structured-output-no-retry-source-returned (\(error.localizedDescription))"
             )
             return StructuredTranslationResult(
-                translation: sourceText.trimmingCharacters(in: .whitespacesAndNewlines),
+                translation: sourceFallbackTranslation(
+                    sourceText: sourceText,
+                    error: error
+                ),
                 outputBreakTagCount: 0
             )
         }
@@ -533,7 +556,10 @@ private enum FoundationModelsRuntimeTranslator {
                 "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): fallback-failed-source-returned (\(error.localizedDescription))"
             )
             return StructuredTranslationResult(
-                translation: sourceText.trimmingCharacters(in: .whitespacesAndNewlines),
+                translation: sourceFallbackTranslation(
+                    sourceText: sourceText,
+                    error: error
+                ),
                 outputBreakTagCount: 0
             )
         }
@@ -697,6 +723,68 @@ private enum FoundationModelsRuntimeTranslator {
             || localized.contains("safety")
             || localized.contains("content")
             || localized.contains("policy")
+    }
+
+    private static func isUnsafeContentError(_ error: Error) -> Bool {
+        var queue: [NSError] = [error as NSError]
+        var visited = Set<String>()
+
+        while let current = queue.popLast() {
+            let key = "\(current.domain)#\(current.code)#\(current.localizedDescription)"
+            if visited.contains(key) {
+                continue
+            }
+            visited.insert(key)
+
+            if isUnsafeSignal(current) {
+                return true
+            }
+
+            if let underlying = current.userInfo[NSUnderlyingErrorKey] as? NSError {
+                queue.append(underlying)
+            }
+            if let detailed = current.userInfo["NSDetailedErrors"] as? [NSError] {
+                queue.append(contentsOf: detailed)
+            }
+            if let multiple = current.userInfo["NSMultipleUnderlyingErrorsKey"] as? [NSError] {
+                queue.append(contentsOf: multiple)
+            }
+        }
+
+        return false
+    }
+
+    private static func isUnsafeSignal(_ error: NSError) -> Bool {
+        let domain = error.domain.lowercased()
+        let description = error.localizedDescription.lowercased()
+        let failureReason = (error.userInfo[NSLocalizedFailureReasonErrorKey] as? String ?? "")
+            .lowercased()
+        let recoverySuggestion = (error.userInfo[NSLocalizedRecoverySuggestionErrorKey] as? String ?? "")
+            .lowercased()
+        let combined = [description, failureReason, recoverySuggestion].joined(separator: " ")
+
+        // Foundation Models generation errors may surface as numeric codes with little text.
+        if domain.contains("languagemodelsession.generationerror"), error.code == 2 {
+            return true
+        }
+
+        return combined.contains("unsafe")
+            || combined.contains("safety")
+            || combined.contains("policy")
+            || combined.contains("content filter")
+            || combined.contains("prohibited")
+            || combined.contains("restricted")
+            || combined.contains("disallowed")
+            || combined.contains("moderation")
+    }
+
+    private static func sourceFallbackTranslation(sourceText: String, error: Error) -> String {
+        let trimmed = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+        if isUnsafeContentError(error) {
+            return "⛔" + trimmed
+        }
+        return trimmed
     }
 
     private static func isContextWindowExceededError(_ error: Error) -> Bool {
