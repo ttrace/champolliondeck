@@ -385,7 +385,8 @@ private enum FoundationModelsRuntimeTranslator {
         }
         let result = try validateStructuredTranslation(
             payload: response.content,
-            expectedTargetLanguage: expectedTargetLanguage
+            expectedTargetLanguage: expectedTargetLanguage,
+            sourceText: sourceText
         )
         onPartialResult?(segmentIndex, result.translation)
         return result
@@ -589,7 +590,8 @@ private enum FoundationModelsRuntimeTranslator {
 
     private static func validateStructuredTranslation(
         payload: StructuredTranslationPayload,
-        expectedTargetLanguage: String
+        expectedTargetLanguage: String,
+        sourceText: String
     ) throws -> StructuredTranslationResult {
         let actualCode = normalizedLanguageCode(payload.targetLanguage)
         let expectedCode = normalizedLanguageCode(expectedTargetLanguage)
@@ -607,8 +609,13 @@ private enum FoundationModelsRuntimeTranslator {
         guard !isPlaceholderTranslation(sanitized) else {
             throw FoundationModelsStructuredOutputError.placeholderTranslation(value: sanitized)
         }
-        let outputBreakTagCount = lineBreakTagCount(in: sanitized)
-        let normalizedTranslation = normalizeBreakTagsToNewline(in: sanitized)
+        let sourcePromptText = sourceTextForPrompt(sourceText)
+        let completed = appendMissingTrailingBreakMarkers(
+            from: sourcePromptText,
+            to: sanitized
+        )
+        let outputBreakTagCount = lineBreakTagCount(in: completed)
+        let normalizedTranslation = normalizeBreakTagsToNewline(in: completed)
         return StructuredTranslationResult(
             translation: normalizedTranslation,
             outputBreakTagCount: outputBreakTagCount
@@ -681,6 +688,28 @@ private enum FoundationModelsRuntimeTranslator {
         }
         let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
         return regex.numberOfMatches(in: text, range: fullRange)
+    }
+
+    private static func appendMissingTrailingBreakMarkers(from sourceText: String, to outputText: String) -> String {
+        let requiredTrailingBreaks = trailingBreakMarkerCount(in: sourceText)
+        guard requiredTrailingBreaks > 0 else { return outputText }
+
+        let actualTrailingBreaks = trailingBreakMarkerCount(in: outputText)
+        guard actualTrailingBreaks < requiredTrailingBreaks else { return outputText }
+
+        return outputText + String(repeating: lineBreakMarker, count: requiredTrailingBreaks - actualTrailingBreaks)
+    }
+
+    private static func trailingBreakMarkerCount(in text: String) -> Int {
+        guard !text.isEmpty else { return 0 }
+
+        var count = 0
+        var remainder = text[...]
+        while remainder.hasSuffix(lineBreakMarker) {
+            count += 1
+            remainder = remainder.dropLast(lineBreakMarker.count)
+        }
+        return count
     }
 
     private static func replaceRegex(pattern: String, in text: String, with replacement: String) -> String {
