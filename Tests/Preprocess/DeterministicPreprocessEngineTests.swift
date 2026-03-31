@@ -126,6 +126,22 @@ struct DeterministicPreprocessEngineTests {
     }
 
     @Test
+    func firstSegmentIsMarkedLeadingForFutureSpecialHandling() {
+        let request = TranslationRequest(
+            sourceLanguage: "en",
+            targetLanguage: "ja",
+            text: "First sentence. Second sentence. Third sentence.",
+            glossary: [],
+            experimentMode: .segmented
+        )
+
+        let result = DeterministicPreprocessEngine().analyze(request)
+
+        #expect(result.input.segments.first?.role == .leading)
+        #expect(result.input.segments.dropFirst().allSatisfy { $0.role == .regular })
+    }
+
+    @Test
     func sentenceSegmentationRoundTripsUnsafeSampleWithoutLosingParagraphBreaks() {
         let request = TranslationRequest(
             sourceLanguage: "en",
@@ -142,6 +158,25 @@ struct DeterministicPreprocessEngineTests {
         )
 
         #expect(reconstructed == unsafeSampleText)
+    }
+
+    @Test
+    func sentenceSegmentationRoundTripsTrailingBreakSampleWithoutLosingParagraphBreaks() {
+        let request = TranslationRequest(
+            sourceLanguage: "en",
+            targetLanguage: "ja",
+            text: trailingBreakSampleText,
+            glossary: [],
+            experimentMode: .segmented
+        )
+
+        let result = DeterministicPreprocessEngine().analyze(request)
+        let reconstructed = reconstruct(
+            segments: result.input.segments,
+            joinersAfter: result.input.segmentJoinersAfter
+        )
+
+        #expect(reconstructed == trailingBreakSampleText)
     }
 
     @Test
@@ -199,4 +234,12 @@ They asked me to buy medication urgently to prevent my condition from worsening,
 If I don't start treatment immediately, I might lose my leg... and maybe my whole life will change 😢. I also need urgent surgery to save me before it's too late.
 
 I returned to the tent devastated... I sat crying in front of my family, helpless to do anything.
+"""
+
+private let trailingBreakSampleText = """
+Such a mission could expose U.S. personnel to an array of threats, including Iranian drones and missiles, ground fire and improvised explosives. It was unclear Saturday whether Trump would approve all, some or none of the Pentagon’s plans.
+
+Follow Trump’s second term
+Follow
+The Trump administration in recent days has vacillated between declaring that the war is winding down and threatening to amplify it. While the president has signaled a desire to negotiate an end to the conflict, White House press secretary Karoline Leavitt warned Tuesday that if the regime in Tehran does not end its nuclear ambitions and cease its threats against the United States and its allies, Trump is “prepared to unleash hell” against them.
 """

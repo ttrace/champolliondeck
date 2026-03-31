@@ -157,7 +157,7 @@ private enum FoundationModelsRuntimeTranslator {
             try ensureModelAvailability()
 
             let segments = input.segments.isEmpty
-                ? [TextSegment(index: 0, text: input.originalText)]
+                ? [TextSegment(index: 0, text: input.originalText, role: .leading)]
                 : input.segments
 
             // Reuse one session per translation request to reduce per-segment setup overhead.
@@ -179,6 +179,7 @@ private enum FoundationModelsRuntimeTranslator {
                         sourceText: segment.text,
                         expectedTargetLanguage: input.targetLanguage,
                         preprocessKind: segment.kind,
+                        shouldStreamPartial: segment.role == .leading,
                         using: session,
                         segmentIndex: segment.index,
                         onPartialResult: onPartialResult,
@@ -214,6 +215,7 @@ private enum FoundationModelsRuntimeTranslator {
                                 sourceText: segment.text,
                                 expectedTargetLanguage: input.targetLanguage,
                                 preprocessKind: segment.kind,
+                                shouldStreamPartial: segment.role == .leading,
                                 using: session,
                                 segmentIndex: segment.index,
                                 onPartialResult: onPartialResult,
@@ -285,6 +287,7 @@ private enum FoundationModelsRuntimeTranslator {
                             sourceText: segment.text,
                             expectedTargetLanguage: input.targetLanguage,
                             preprocessKind: segment.kind,
+                            shouldStreamPartial: segment.role == .leading,
                             using: retrySession,
                             segmentIndex: segment.index,
                             onPartialResult: onPartialResult,
@@ -328,6 +331,7 @@ private enum FoundationModelsRuntimeTranslator {
         sourceText: String,
         expectedTargetLanguage: String,
         preprocessKind: SegmentKind,
+        shouldStreamPartial: Bool,
         using session: LanguageModelSession,
         segmentIndex: Int,
         onPartialResult: (@Sendable (_ segmentIndex: Int, _ partialTranslation: String) -> Void)?,
@@ -345,6 +349,7 @@ private enum FoundationModelsRuntimeTranslator {
                 prompt: prompt,
                 sourceText: sourceText,
                 expectedTargetLanguage: expectedTargetLanguage,
+                shouldStreamPartial: shouldStreamPartial,
                 using: session,
                 segmentIndex: segmentIndex,
                 onPartialResult: onPartialResult,
@@ -367,28 +372,77 @@ private enum FoundationModelsRuntimeTranslator {
         prompt: String,
         sourceText: String,
         expectedTargetLanguage: String,
+        shouldStreamPartial: Bool,
         using session: LanguageModelSession,
         segmentIndex: Int,
         onPartialResult: (@Sendable (_ segmentIndex: Int, _ partialTranslation: String) -> Void)?,
         onDiagnosticEvent: (@Sendable (_ message: String) -> Void)?
     ) async throws -> StructuredTranslationResult {
-        let response = try await session.respond(
+        let payload: StructuredTranslationPayload
+        if shouldStreamPartial, onPartialResult != nil {
+            payload = try await streamSegmentResponse(
+                prompt: prompt,
+                using: session,
+                segmentIndex: segmentIndex,
+                onPartialResult: onPartialResult
+            )
+        } else {
+            payload = try await session.respond(
+                to: prompt,
+                generating: StructuredTranslationPayload.self,
+                includeSchemaInPrompt: true
+            ).content
+        }
+        if verboseLoggingEnabled {
+            let translationForLog = sanitizedForLog(payload.translation) ?? "(empty)"
+            onDiagnosticEvent?(
+                "verbose model-output segment=\(segmentIndex), payload={targetLanguage=\(payload.targetLanguage), translationChars=\(payload.translation.count), translation=\(translationForLog)}"
+            )
+        }
+        let result = try validateStructuredTranslation(
+            payload: payload,
+            expectedTargetLanguage: expectedTargetLanguage,
+            sourceText: sourceText
+        )
+        onPartialResult?(segmentIndex, result.translation)
+        return result
+    }
+
+    private static func streamSegmentResponse(
+        prompt: String,
+        using session: LanguageModelSession,
+        segmentIndex: Int,
+        onPartialResult: (@Sendable (_ segmentIndex: Int, _ partialTranslation: String) -> Void)?
+    ) async throws -> StructuredTranslationPayload {
+        let stream = session.streamResponse(
             to: prompt,
             generating: StructuredTranslationPayload.self,
             includeSchemaInPrompt: true
         )
-        if verboseLoggingEnabled {
-            let translationForLog = sanitizedForLog(response.content.translation) ?? "(empty)"
-            onDiagnosticEvent?(
-                "verbose model-output segment=\(segmentIndex), payload={targetLanguage=\(response.content.targetLanguage), translationChars=\(response.content.translation.count), translation=\(translationForLog)}"
-            )
+
+        var latestSnapshot: LanguageModelSession.ResponseStream<StructuredTranslationPayload>.Snapshot?
+        var lastPartialTranslation: String?
+
+        for try await snapshot in stream {
+            latestSnapshot = snapshot
+
+            guard let partialTranslation = extractPartialTranslation(
+                fromRawJSON: snapshot.rawContent.jsonString
+            ) else {
+                continue
+            }
+
+            let normalizedPartial = normalizeBreakTagsToNewline(in: partialTranslation)
+            guard normalizedPartial != lastPartialTranslation else { continue }
+            lastPartialTranslation = normalizedPartial
+            onPartialResult?(segmentIndex, normalizedPartial)
         }
-        let result = try validateStructuredTranslation(
-            payload: response.content,
-            expectedTargetLanguage: expectedTargetLanguage
-        )
-        onPartialResult?(segmentIndex, result.translation)
-        return result
+
+        guard let latestSnapshot else {
+            throw FoundationModelsStructuredOutputError.invalidFormat(content: "(empty stream)")
+        }
+
+        return try StructuredTranslationPayload(latestSnapshot.rawContent)
     }
 
     private static func extractPartialTranslation(fromRawJSON raw: String) -> String? {
@@ -569,6 +623,7 @@ private enum FoundationModelsRuntimeTranslator {
                 sourceText: sourceText,
                 expectedTargetLanguage: expectedTargetLanguage,
                 preprocessKind: preprocessKind,
+                shouldStreamPartial: false,
                 using: session,
                 segmentIndex: segmentIndex,
                 onPartialResult: onPartialResult,
@@ -589,7 +644,8 @@ private enum FoundationModelsRuntimeTranslator {
 
     private static func validateStructuredTranslation(
         payload: StructuredTranslationPayload,
-        expectedTargetLanguage: String
+        expectedTargetLanguage: String,
+        sourceText: String
     ) throws -> StructuredTranslationResult {
         let actualCode = normalizedLanguageCode(payload.targetLanguage)
         let expectedCode = normalizedLanguageCode(expectedTargetLanguage)
@@ -607,8 +663,13 @@ private enum FoundationModelsRuntimeTranslator {
         guard !isPlaceholderTranslation(sanitized) else {
             throw FoundationModelsStructuredOutputError.placeholderTranslation(value: sanitized)
         }
-        let outputBreakTagCount = lineBreakTagCount(in: sanitized)
-        let normalizedTranslation = normalizeBreakTagsToNewline(in: sanitized)
+        let sourcePromptText = sourceTextForPrompt(sourceText)
+        let completed = appendMissingTrailingBreakMarkers(
+            from: sourcePromptText,
+            to: sanitized
+        )
+        let outputBreakTagCount = lineBreakTagCount(in: completed)
+        let normalizedTranslation = normalizeBreakTagsToNewline(in: completed)
         return StructuredTranslationResult(
             translation: normalizedTranslation,
             outputBreakTagCount: outputBreakTagCount
@@ -681,6 +742,28 @@ private enum FoundationModelsRuntimeTranslator {
         }
         let fullRange = NSRange(text.startIndex..<text.endIndex, in: text)
         return regex.numberOfMatches(in: text, range: fullRange)
+    }
+
+    private static func appendMissingTrailingBreakMarkers(from sourceText: String, to outputText: String) -> String {
+        let requiredTrailingBreaks = trailingBreakMarkerCount(in: sourceText)
+        guard requiredTrailingBreaks > 0 else { return outputText }
+
+        let actualTrailingBreaks = trailingBreakMarkerCount(in: outputText)
+        guard actualTrailingBreaks < requiredTrailingBreaks else { return outputText }
+
+        return outputText + String(repeating: lineBreakMarker, count: requiredTrailingBreaks - actualTrailingBreaks)
+    }
+
+    private static func trailingBreakMarkerCount(in text: String) -> Int {
+        guard !text.isEmpty else { return 0 }
+
+        var count = 0
+        var remainder = text[...]
+        while remainder.hasSuffix(lineBreakMarker) {
+            count += 1
+            remainder = remainder.dropLast(lineBreakMarker.count)
+        }
+        return count
     }
 
     private static func replaceRegex(pattern: String, in text: String, with replacement: String) -> String {

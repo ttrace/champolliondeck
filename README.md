@@ -64,7 +64,7 @@ If Apple Intelligence blocks a segment as unsafe, Pre-Babel Lens stops retrying 
 
 Current behavior:
 - The blocked segment falls back to the original source text.
-- Unsafe-source fallback is marked with a leading `⛔`.
+- Unsafe-source fallback is shown as original text with a distinct text color and marker-style background.
 - Other segments can continue translating when possible.
 
 ## Translation Failure Handling
@@ -86,7 +86,7 @@ When a segment cannot be translated cleanly, the Foundation Models engine applie
 4. Structured-output mismatch:
    - If structured output validation fails (for example target language mismatch / empty / placeholder), the segment falls back to source text.
 5. Unsafe content:
-   - If Foundation Models reports a safety or policy restriction, the segment falls back to source text with a leading `⛔`.
+   - If Foundation Models reports a safety or policy restriction, the segment falls back to source text with a distinct text color and marker-style background.
    - This path is treated as no-retry to avoid repeated blocked generations.
 6. Cancellation handling:
    - Cancellation is propagated immediately (not converted to source fallback), so stopped jobs can drain cleanly.
