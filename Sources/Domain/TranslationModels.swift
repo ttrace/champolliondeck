@@ -111,19 +111,22 @@ struct SegmentOutput: Hashable, Equatable, Identifiable {
     var sourceText: String
     var translatedText: String
     var isUnsafeFallback: Bool
+    var isUnsafeRecoveredByTranslationFramework: Bool
 
     init(
         id: UUID = UUID(),
         segmentIndex: Int,
         sourceText: String,
         translatedText: String,
-        isUnsafeFallback: Bool = false
+        isUnsafeFallback: Bool = false,
+        isUnsafeRecoveredByTranslationFramework: Bool = false
     ) {
         self.id = id
         self.segmentIndex = segmentIndex
         self.sourceText = sourceText
         self.translatedText = translatedText
         self.isUnsafeFallback = isUnsafeFallback
+        self.isUnsafeRecoveredByTranslationFramework = isUnsafeRecoveredByTranslationFramework
     }
 }
 

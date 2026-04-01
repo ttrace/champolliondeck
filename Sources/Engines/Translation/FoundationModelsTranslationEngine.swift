@@ -183,6 +183,7 @@ private enum FoundationModelsRuntimeTranslator {
                 let prompt = promptForSegment(segment, input: input)
                 var finalResult: StructuredTranslationResult
                 var isUnsafeFallback = false
+                var isUnsafeRecoveredByTranslationFramework = false
                 var shouldSkipSentenceDropRetry = false
 
                 do {
@@ -206,15 +207,17 @@ private enum FoundationModelsRuntimeTranslator {
                         onDiagnosticEvent?(
                             "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): unsafe-no-retry-source-returned (\(error.localizedDescription))"
                         )
+                        let unsafeRecovery = await recoverUnsafeTranslationIfPossible(
+                            sourceText: segment.text,
+                            input: input,
+                            segmentIndex: segment.index,
+                            preprocessKind: segment.kind,
+                            unsafeSegmentRecoveryEngine: unsafeSegmentRecoveryEngine,
+                            onDiagnosticEvent: onDiagnosticEvent
+                        )
+                        isUnsafeRecoveredByTranslationFramework = unsafeRecovery.usedTranslationFrameworkRecovery
                         finalResult = StructuredTranslationResult(
-                            translation: await recoverUnsafeTranslationIfPossible(
-                                sourceText: segment.text,
-                                input: input,
-                                segmentIndex: segment.index,
-                                preprocessKind: segment.kind,
-                                unsafeSegmentRecoveryEngine: unsafeSegmentRecoveryEngine,
-                                onDiagnosticEvent: onDiagnosticEvent
-                            ),
+                            translation: unsafeRecovery.translation,
                             outputBreakTagCount: 0
                         )
                         session = LanguageModelSession(instructions: instructions(for: input))
@@ -249,15 +252,17 @@ private enum FoundationModelsRuntimeTranslator {
                             onDiagnosticEvent?(
                                 "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): retry-after-session-refresh-failed-source-returned (\(error.localizedDescription))"
                             )
+                            let unsafeRecovery = await recoverUnsafeTranslationIfPossible(
+                                sourceText: segment.text,
+                                input: input,
+                                segmentIndex: segment.index,
+                                preprocessKind: segment.kind,
+                                unsafeSegmentRecoveryEngine: unsafeSegmentRecoveryEngine,
+                                onDiagnosticEvent: onDiagnosticEvent
+                            )
+                            isUnsafeRecoveredByTranslationFramework = unsafeRecovery.usedTranslationFrameworkRecovery
                             finalResult = StructuredTranslationResult(
-                                translation: await recoverUnsafeTranslationIfPossible(
-                                    sourceText: segment.text,
-                                    input: input,
-                                    segmentIndex: segment.index,
-                                    preprocessKind: segment.kind,
-                                    unsafeSegmentRecoveryEngine: unsafeSegmentRecoveryEngine,
-                                    onDiagnosticEvent: onDiagnosticEvent
-                                ),
+                                translation: unsafeRecovery.translation,
                                 outputBreakTagCount: 0
                             )
                             if isUnsafeFallback {
@@ -287,7 +292,8 @@ private enum FoundationModelsRuntimeTranslator {
                             segmentIndex: segment.index,
                             sourceText: segment.text,
                             translatedText: finalResult.translation,
-                            isUnsafeFallback: true
+                            isUnsafeFallback: true,
+                            isUnsafeRecoveredByTranslationFramework: isUnsafeRecoveredByTranslationFramework
                         )
                     )
                     continue
@@ -916,7 +922,7 @@ private enum FoundationModelsRuntimeTranslator {
         preprocessKind: SegmentKind,
         unsafeSegmentRecoveryEngine: UnsafeSegmentRecoveryEngine,
         onDiagnosticEvent: (@Sendable (_ message: String) -> Void)?
-    ) async -> String {
+    ) async -> (translation: String, usedTranslationFrameworkRecovery: Bool) {
         onDiagnosticEvent?(
             "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): attempting-translation-framework-recovery"
         )
@@ -934,13 +940,13 @@ private enum FoundationModelsRuntimeTranslator {
             onDiagnosticEvent?(
                 "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): translation-framework-recovery-succeeded"
             )
-            return completed
+            return (completed, true)
         }
 
         onDiagnosticEvent?(
             "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): translation-framework-recovery-unavailable-source-returned"
         )
-        return sourceFallbackTranslation(sourceText: sourceText)
+        return (sourceFallbackTranslation(sourceText: sourceText), false)
     }
 
     private static func normalizeRecoveredUnsafeTranslation(

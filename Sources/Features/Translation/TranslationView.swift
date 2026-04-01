@@ -2,17 +2,18 @@ import SwiftUI
 
 #if os(macOS)
     import AppKit
-    #if canImport(Translation)
-        import Translation
-    #endif
-#elseif canImport(UIKit)
+#endif
+#if canImport(Translation)
+    import Translation
+#endif
+#if canImport(UIKit)
     import UIKit
 #endif
 
 struct TranslationView: View {
     // #region MARK: MARK:State
     @StateObject private var viewModel: TranslationViewModel
-    #if os(macOS) && canImport(Translation)
+    #if canImport(Translation)
         @ObservedObject private var unsafeRecoveryController: TranslationFrameworkUnsafeRecoveryController
     #endif
     @AppStorage("developerModeEnabled") private var developerModeEnabled: Bool = false
@@ -27,12 +28,12 @@ struct TranslationView: View {
     // #region MARK: Init
     init(viewModel: TranslationViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
-        #if os(macOS) && canImport(Translation)
+        #if canImport(Translation)
         self.unsafeRecoveryController = TranslationFrameworkUnsafeRecoveryController()
         #endif
     }
 
-    #if os(macOS) && canImport(Translation)
+    #if canImport(Translation)
     init(
         viewModel: TranslationViewModel,
         unsafeRecoveryController: TranslationFrameworkUnsafeRecoveryController
@@ -82,7 +83,7 @@ struct TranslationView: View {
             }
             #endif
         }
-        #if os(macOS) && canImport(Translation)
+        #if canImport(Translation)
         baseView
             .overlay {
                 if let configuration = unsafeRecoveryController.configuration {
@@ -93,11 +94,19 @@ struct TranslationView: View {
                     )
                 }
             }
+            #if os(iOS)
+            .translationViewLifecycleModifiers(
+                viewModel: viewModel,
+                isJapaneseLocale: isJapaneseLocale,
+                handleSharedImportIfNeeded: handleSharedImportIfNeeded
+            )
+            #else
             .translationViewLifecycleModifiers(
                 viewModel: viewModel,
                 isJapaneseLocale: isJapaneseLocale,
                 handleSharedImportIfNeeded: {}
             )
+            #endif
         #else
         baseView
             .translationViewLifecycleModifiers(
@@ -458,12 +467,25 @@ struct TranslationView: View {
         for (index, segment) in viewModel.segmentOutputs.enumerated() {
             var chunk = AttributedString(segment.translatedText + joinerAfterOutputSegment(at: index))
             if segment.isUnsafeFallback {
-                chunk.backgroundColor = unsafeSegmentBackgroundColor
-                chunk.foregroundColor = unsafeSegmentForegroundColor
+                if segment.isUnsafeRecoveredByTranslationFramework {
+                    chunk.backgroundColor = unsafeRecoveredSegmentBackgroundColor
+                    chunk.foregroundColor = unsafeRecoveredSegmentForegroundColor
+                } else {
+                    chunk.backgroundColor = unsafeSegmentBackgroundColor
+                    chunk.foregroundColor = unsafeSegmentForegroundColor
+                }
             }
             result.append(chunk)
         }
         return result
+    }
+
+    private var unsafeRecoveredSegmentBackgroundColor: Color {
+        Color.blue.opacity(colorScheme == .dark ? 0.34 : 0.18)
+    }
+
+    private var unsafeRecoveredSegmentForegroundColor: Color {
+        Color.black.opacity(colorScheme == .dark ? 0.80 : 0.86)
     }
 
     private var unsafeSegmentBackgroundColor: Color {
@@ -668,7 +690,7 @@ struct TranslationView: View {
     }
 }
 
-#if os(macOS) && canImport(Translation)
+#if canImport(Translation)
 private struct TranslationUnsafeRecoveryTaskHost: View {
     let configuration: TranslationSession.Configuration
     let generation: UUID
