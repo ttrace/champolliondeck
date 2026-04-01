@@ -237,6 +237,12 @@ I returned to the tent devastated... I sat crying in front of my family, helples
 """
 
 private let trailingBreakSampleText = """
+PixVerse
+@PixVerse_
+fuck fuck fuck Ad９ag4
+Powg47yhw
+er-Up Wk Day 2. pping moe f９r builders.
+
 Such a mission could expose U.S. personnel to an array of threats, including Iranian drones and missiles, ground fire and improvised explosives. It was unclear Saturday whether Trump would approve all, some or none of the Pentagon’s plans.
 
 Follow Trump’s second term
