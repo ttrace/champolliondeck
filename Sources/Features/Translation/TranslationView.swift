@@ -485,7 +485,9 @@ struct TranslationView: View {
     }
 
     private var unsafeRecoveredSegmentForegroundColor: Color {
-        Color.black.opacity(colorScheme == .dark ? 0.80 : 0.86)
+        colorScheme == .dark
+            ? Color.white.opacity(0.96)
+            : Color.black.opacity(0.86)
     }
 
     private var unsafeSegmentBackgroundColor: Color {
@@ -494,7 +496,7 @@ struct TranslationView: View {
 
     private var unsafeSegmentForegroundColor: Color {
         colorScheme == .dark
-            ? Color.black.opacity(0.82)
+            ? Color.white.opacity(0.96)
             : Color.black.opacity(0.72)
     }
 
