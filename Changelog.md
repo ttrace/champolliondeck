@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.2 (Unreleased)
+## 0.6.3 (Unreleased)
 
 0.5.0 からの主なユーザー向け変更点:
 
@@ -21,6 +21,12 @@
 - Foundation Models の部分表示と構造化出力ガードを継続改善
   - `snapshot.rawContent.jsonString` から途中の `translation` を抽出
   - `translation` に `kind` ラベルのみが返るケースを不正として再試行/フォールバックへ回すよう改善
+- iOSで unsafe フォールバック時に Translation Framework を利用可能に
+  - 翻訳可能なケースでは on-device で補完翻訳
+  - 不可の場合は従来どおり原文フォールバック
+- unsafe 挿入テキストの表示を改善
+  - Translation Framework で補完できたセグメントは水色
+  - 原文フォールバックは従来色を維持
 
 ## 0.4.0
 
