@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (Unreleased)
+## 0.6.2 (Unreleased)
 
 0.5.0 からの主なユーザー向け変更点:
 

@@ -2,6 +2,14 @@ import Foundation
 
 @MainActor
 final class TranslationViewModel: ObservableObject {
+    struct UserAlert: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+        let inlineMessage: String
+        let offersSettingsShortcut: Bool
+    }
+
     enum TranslationStatus: Equatable {
         case ready
         case processing(mode: TranslationExperimentMode)
@@ -27,6 +35,7 @@ final class TranslationViewModel: ObservableObject {
     @Published var aiLanguageSupported: Bool = true
     @Published var isTranslating: Bool = false
     @Published var errorMessage: String?
+    @Published var userAlert: UserAlert?
     @Published var developerLogs: [String] = []
     @Published private(set) var status: TranslationStatus = .ready
 
@@ -178,6 +187,7 @@ final class TranslationViewModel: ObservableObject {
             detectedLanguageCode = ""
             aiLanguageSupported = true
             errorMessage = nil
+            userAlert = nil
             status = .ready
             pendingTranslationRequestStartedAt = nil
             resetSessionMetricsState()
@@ -203,6 +213,7 @@ final class TranslationViewModel: ObservableObject {
         detectedLanguageCode = ""
         aiLanguageSupported = true
         errorMessage = nil
+        userAlert = nil
         partialTranslationsBySegment = [:]
         partialJoinersAfter = []
         status = .processing(mode: experimentMode)
@@ -257,6 +268,7 @@ final class TranslationViewModel: ObservableObject {
             detectedLanguageCode = output.analysis.input.detectedLanguageCode ?? ""
             aiLanguageSupported = output.analysis.input.isDetectedLanguageSupportedByAppleIntelligence
             errorMessage = nil
+            userAlert = nil
             status = .completed
         } catch is CancellationError {
             status = .stopped
@@ -266,11 +278,21 @@ final class TranslationViewModel: ObservableObject {
                 detectedLanguageCode = detected
                 aiLanguageSupported = false
             }
-            errorMessage = pipelineError.localizedDescription
+            if let alert = userAlert(for: pipelineError.localizedDescription) {
+                userAlert = alert
+                errorMessage = alert.inlineMessage
+            } else {
+                errorMessage = pipelineError.localizedDescription
+            }
             status = .ready
             appendSessionLog("pipeline-error: \(pipelineError.localizedDescription)")
         } catch {
-            errorMessage = error.localizedDescription
+            if let alert = userAlert(for: error.localizedDescription) {
+                userAlert = alert
+                errorMessage = alert.inlineMessage
+            } else {
+                errorMessage = error.localizedDescription
+            }
             status = .ready
             appendSessionLog(detailedErrorLog(from: error))
         }
@@ -301,6 +323,10 @@ final class TranslationViewModel: ObservableObject {
         developerLogs.removeAll(keepingCapacity: true)
     }
 
+    func dismissUserAlert() {
+        userAlert = nil
+    }
+
     private func parseGlossary(_ raw: String) -> [GlossaryEntry] {
         raw
             .split(separator: "\n")
@@ -309,6 +335,56 @@ final class TranslationViewModel: ObservableObject {
                 guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { return nil }
                 return GlossaryEntry(source: parts[0], target: parts[1])
             }
+    }
+
+    private func userAlert(for localizedDescription: String) -> UserAlert? {
+        if localizedDescription.contains("current build toolchain") {
+            return UserAlert(
+                title: isJapaneseLocale ? "Foundation Models を利用できません" : "Foundation Models Unavailable",
+                message: isJapaneseLocale
+                    ? "現在のビルド環境では Foundation Models を利用できません。Xcode の正式なツールチェーンでビルドし直してから、もう一度お試しください。"
+                    : "Foundation Models is unavailable in the current build toolchain. Rebuild the app with the Xcode toolchain and try again.",
+                inlineMessage: isJapaneseLocale
+                    ? "Foundation Models を利用できません。Xcode で再ビルドしてください。"
+                    : "Foundation Models is unavailable. Rebuild with the Xcode toolchain.",
+                offersSettingsShortcut: false
+            )
+        }
+
+        if localizedDescription.contains("requires macOS 26.0+ / iOS 26.0+") {
+            return UserAlert(
+                title: isJapaneseLocale ? "対応していないOSです" : "Unsupported OS Version",
+                message: isJapaneseLocale
+                    ? "Foundation Models には macOS 26 以降、または iOS 26 以降が必要です。対応OSにアップデートしてから、もう一度お試しください。"
+                    : "Foundation Models requires macOS 26.0+ or iOS 26.0+. Update to a supported OS version and try again.",
+                inlineMessage: isJapaneseLocale
+                    ? "対応OSが必要です。"
+                    : "A supported OS version is required.",
+                offersSettingsShortcut: false
+            )
+        }
+
+        if localizedDescription.contains("Foundation Models is unavailable")
+            || localizedDescription.contains("Enable Apple Intelligence")
+            || localizedDescription.contains("finish downloading model assets")
+        {
+            return UserAlert(
+                title: isJapaneseLocale ? "Apple Intelligence を確認してください" : "Check Apple Intelligence",
+                message: isJapaneseLocale
+                    ? "この iPhone では Apple Intelligence の準備が完了していないようです。Settings を開いて Apple Intelligence を有効にし、モデルのダウンロード完了を確認してから、もう一度お試しください。\n\n設定アプリでは「Siri と Apple Intelligence」を確認してください。"
+                    : "Apple Intelligence does not appear to be ready on this iPhone yet. Open Settings, make sure Apple Intelligence is enabled, and finish downloading the required model assets before trying again.\n\nIn Settings, check “Siri & Apple Intelligence.”",
+                inlineMessage: isJapaneseLocale
+                    ? "Apple Intelligence の設定またはダウンロードを確認してください。"
+                    : "Check Apple Intelligence settings and model downloads.",
+                offersSettingsShortcut: true
+            )
+        }
+
+        return nil
+    }
+
+    private var isJapaneseLocale: Bool {
+        Locale.preferredLanguages.first?.hasPrefix("ja") == true
     }
 
     private func reconstructPartialTranslatedText() -> String {

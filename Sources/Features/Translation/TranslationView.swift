@@ -75,6 +75,28 @@ struct TranslationView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             handleSharedImportIfNeeded()
         }
+        .alert(item: $viewModel.userAlert) { alert in
+            if alert.offersSettingsShortcut {
+                return Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    primaryButton: .default(Text(isJapaneseLocale ? "Settings を開く" : "Open Settings")) {
+                        openAppSettings()
+                    },
+                    secondaryButton: .cancel(Text(isJapaneseLocale ? "閉じる" : "Close")) {
+                        viewModel.dismissUserAlert()
+                    }
+                )
+            }
+
+            return Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text(isJapaneseLocale ? "OK" : "OK")) {
+                    viewModel.dismissUserAlert()
+                }
+            )
+        }
         #endif
     }
     // #endregion
@@ -625,6 +647,11 @@ struct TranslationView: View {
 
     private var sharedImportToastTitle: String {
         isJapaneseLocale ? "共有テキストを取り込みました" : "Shared text imported."
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
     #endif
 
