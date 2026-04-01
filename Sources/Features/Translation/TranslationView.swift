@@ -467,12 +467,25 @@ struct TranslationView: View {
         for (index, segment) in viewModel.segmentOutputs.enumerated() {
             var chunk = AttributedString(segment.translatedText + joinerAfterOutputSegment(at: index))
             if segment.isUnsafeFallback {
-                chunk.backgroundColor = unsafeSegmentBackgroundColor
-                chunk.foregroundColor = unsafeSegmentForegroundColor
+                if segment.isUnsafeRecoveredByTranslationFramework {
+                    chunk.backgroundColor = unsafeRecoveredSegmentBackgroundColor
+                    chunk.foregroundColor = unsafeRecoveredSegmentForegroundColor
+                } else {
+                    chunk.backgroundColor = unsafeSegmentBackgroundColor
+                    chunk.foregroundColor = unsafeSegmentForegroundColor
+                }
             }
             result.append(chunk)
         }
         return result
+    }
+
+    private var unsafeRecoveredSegmentBackgroundColor: Color {
+        Color.blue.opacity(colorScheme == .dark ? 0.34 : 0.18)
+    }
+
+    private var unsafeRecoveredSegmentForegroundColor: Color {
+        Color.black.opacity(colorScheme == .dark ? 0.80 : 0.86)
     }
 
     private var unsafeSegmentBackgroundColor: Color {
