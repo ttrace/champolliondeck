@@ -144,6 +144,9 @@ private actor FoundationModelsTranslationGate {
 private enum FoundationModelsRuntimeTranslator {
     private static let lineBreakMarker = "</br>"
     private static let translationGate = FoundationModelsTranslationGate()
+    private static let maxSegmentsPerSession = 6
+    private static let maxEstimatedContextCostPerSession = 12_000
+    private static let largePromptCharsThreshold = 2_200
 
     @available(macOS 26.0, iOS 26.0, *)
     @Generable
@@ -174,17 +177,32 @@ private enum FoundationModelsRuntimeTranslator {
 
             // Reuse one session per translation request to reduce per-segment setup overhead.
             var session = LanguageModelSession(instructions: instructions(for: input))
+            var sessionSegmentCount = 0
+            var sessionEstimatedContextCost = 0
 
             var outputs: [SegmentOutput] = []
             outputs.reserveCapacity(segments.count)
 
             for segment in segments {
                 try Task.checkCancellation()
+                let segmentStartedAt = Date()
                 let prompt = promptForSegment(segment, input: input)
+                let nextPromptChars = prompt.count
+                if shouldRefreshSessionProactively(
+                    usedSegmentCount: sessionSegmentCount,
+                    usedEstimatedContextCost: sessionEstimatedContextCost,
+                    nextPromptChars: nextPromptChars
+                ) {
+                    session = LanguageModelSession(instructions: instructions(for: input))
+                    sessionSegmentCount = 0
+                    sessionEstimatedContextCost = 0
+                    onDiagnosticEvent?("segment=\(segment.index): proactive-session-refresh-before-context-window-limit")
+                }
                 var finalResult: StructuredTranslationResult
                 var isUnsafeFallback = false
                 var isUnsafeRecoveredByTranslationFramework = false
                 var shouldSkipSentenceDropRetry = false
+                var didResetSessionForNextSegment = false
 
                 do {
                     finalResult = try await translateStructuredSegmentWithRetry(
@@ -204,9 +222,7 @@ private enum FoundationModelsRuntimeTranslator {
                     if isUnsafeContentError(error) {
                         isUnsafeFallback = true
                         shouldSkipSentenceDropRetry = true
-                        onDiagnosticEvent?(
-                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): unsafe-no-retry-source-returned (\(error.localizedDescription))"
-                        )
+                        onDiagnosticEvent?("segment=\(segment.index): unsafe-no-retry-source-returned (\(error.localizedDescription))")
                         let unsafeRecovery = await recoverUnsafeTranslationIfPossible(
                             sourceText: segment.text,
                             input: input,
@@ -221,14 +237,15 @@ private enum FoundationModelsRuntimeTranslator {
                             outputBreakTagCount: 0
                         )
                         session = LanguageModelSession(instructions: instructions(for: input))
-                        onDiagnosticEvent?(
-                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): session-reset-after-unsafe-fallback"
-                        )
+                        sessionSegmentCount = 0
+                        sessionEstimatedContextCost = 0
+                        didResetSessionForNextSegment = true
+                        onDiagnosticEvent?("segment=\(segment.index): session-reset-after-unsafe-fallback")
                     } else if isContextWindowExceededError(error) {
-                        onDiagnosticEvent?(
-                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): context-window-exceeded-refresh-session-and-retry"
-                        )
+                        onDiagnosticEvent?("segment=\(segment.index): context-window-exceeded-refresh-session-and-retry")
                         session = LanguageModelSession(instructions: instructions(for: input))
+                        sessionSegmentCount = 0
+                        sessionEstimatedContextCost = 0
                         do {
                             finalResult = try await translateStructuredSegmentWithRetry(
                                 prompt: prompt,
@@ -241,17 +258,13 @@ private enum FoundationModelsRuntimeTranslator {
                                 onPartialResult: onPartialResult,
                                 onDiagnosticEvent: onDiagnosticEvent
                             )
-                            onDiagnosticEvent?(
-                                "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): resumed-after-session-refresh"
-                            )
+                            onDiagnosticEvent?("segment=\(segment.index): resumed-after-session-refresh")
                         } catch is CancellationError {
                             throw CancellationError()
                         } catch {
                             isUnsafeFallback = isUnsafeContentError(error)
                             shouldSkipSentenceDropRetry = isUnsafeFallback
-                            onDiagnosticEvent?(
-                                "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): retry-after-session-refresh-failed-source-returned (\(error.localizedDescription))"
-                            )
+                            onDiagnosticEvent?("segment=\(segment.index): retry-after-session-refresh-failed-source-returned (\(error.localizedDescription))")
                             let unsafeRecovery = await recoverUnsafeTranslationIfPossible(
                                 sourceText: segment.text,
                                 input: input,
@@ -267,15 +280,20 @@ private enum FoundationModelsRuntimeTranslator {
                             )
                             if isUnsafeFallback {
                                 session = LanguageModelSession(instructions: instructions(for: input))
-                                onDiagnosticEvent?(
-                                    "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): session-reset-after-unsafe-fallback"
-                                )
+                                sessionSegmentCount = 0
+                                sessionEstimatedContextCost = 0
+                                didResetSessionForNextSegment = true
+                                onDiagnosticEvent?("segment=\(segment.index): session-reset-after-unsafe-fallback")
+                            } else if isContextWindowExceededError(error) {
+                                session = LanguageModelSession(instructions: instructions(for: input))
+                                sessionSegmentCount = 0
+                                sessionEstimatedContextCost = 0
+                                didResetSessionForNextSegment = true
+                                onDiagnosticEvent?("segment=\(segment.index): session-reset-after-context-window-retry-failure")
                             }
                         }
                     } else {
-                        onDiagnosticEvent?(
-                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): no-retry-source-returned (\(error.localizedDescription))"
-                        )
+                        onDiagnosticEvent?("segment=\(segment.index): no-retry-source-returned (\(error.localizedDescription))")
                         finalResult = StructuredTranslationResult(
                             translation: sourceFallbackTranslation(
                                 sourceText: segment.text
@@ -287,6 +305,11 @@ private enum FoundationModelsRuntimeTranslator {
 
                 if isUnsafeFallback {
                     onPartialResult?(segment.index, finalResult.translation)
+                    let segmentDurationMs = Date().timeIntervalSince(segmentStartedAt) * 1_000
+                    let segmentDurationString = String(format: "%.2f", segmentDurationMs)
+                    onDiagnosticEvent?(
+                        "segment=\(segment.index), unsafe-fallback=true, tf-recovered=\(isUnsafeRecoveredByTranslationFramework), duration-ms=\(segmentDurationString)"
+                    )
                     outputs.append(
                         SegmentOutput(
                             segmentIndex: segment.index,
@@ -296,6 +319,10 @@ private enum FoundationModelsRuntimeTranslator {
                             isUnsafeRecoveredByTranslationFramework: isUnsafeRecoveredByTranslationFramework
                         )
                     )
+                    if !didResetSessionForNextSegment {
+                        sessionSegmentCount += 1
+                        sessionEstimatedContextCost += estimatedContextCost(forPromptChars: nextPromptChars)
+                    }
                     continue
                 }
 
@@ -305,9 +332,7 @@ private enum FoundationModelsRuntimeTranslator {
                     inputSentenceCount: inputSentenceCount,
                     outputSentenceCount: outputSentenceCount
                 ) {
-                    onDiagnosticEvent?(
-                        "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): sentence-count-drop-detected retry-once"
-                    )
+                    onDiagnosticEvent?("segment=\(segment.index): sentence-count-drop-detected retry-once")
                     do {
                         let retrySession = LanguageModelSession(instructions: instructions(for: input))
                         let retryResult = try await translateStructuredSegmentWithRetry(
@@ -323,21 +348,19 @@ private enum FoundationModelsRuntimeTranslator {
                         )
                         finalResult = retryResult
                         outputSentenceCount = sentenceCountByNLTokenizer(finalResult.translation)
-                        onDiagnosticEvent?(
-                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): sentence-count-retry-finished"
-                        )
+                        onDiagnosticEvent?("segment=\(segment.index): sentence-count-retry-finished")
                     } catch is CancellationError {
                         throw CancellationError()
                     } catch {
-                        onDiagnosticEvent?(
-                            "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue): sentence-count-retry-failed-keep-first (\(error.localizedDescription))"
-                        )
+                        onDiagnosticEvent?("segment=\(segment.index): sentence-count-retry-failed-keep-first (\(error.localizedDescription))")
                     }
                 }
                 let inputBreakCount = lineBreakTagCount(in: sourceTextForPrompt(segment.text))
                 let outputBreakCount = finalResult.outputBreakTagCount
+                let segmentDurationMs = Date().timeIntervalSince(segmentStartedAt) * 1_000
+                let segmentDurationString = String(format: "%.2f", segmentDurationMs)
                 onDiagnosticEvent?(
-                    "segment=\(segment.index), preprocess-kind=\(segment.kind.rawValue), sentence-counts={input=\(inputSentenceCount), output=\(outputSentenceCount)}, br-counts={input=\(inputBreakCount), output=\(outputBreakCount)}"
+                    "segment=\(segment.index), sentence-counts={input=\(inputSentenceCount), output=\(outputSentenceCount)}, br-counts={input=\(inputBreakCount), output=\(outputBreakCount)}, duration-ms=\(segmentDurationString)"
                 )
 
                 outputs.append(
@@ -348,6 +371,10 @@ private enum FoundationModelsRuntimeTranslator {
                         isUnsafeFallback: isUnsafeFallback
                     )
                 )
+                if !didResetSessionForNextSegment {
+                    sessionSegmentCount += 1
+                    sessionEstimatedContextCost += estimatedContextCost(forPromptChars: nextPromptChars)
+                }
             }
 
             return outputs
@@ -368,9 +395,7 @@ private enum FoundationModelsRuntimeTranslator {
         if verboseLoggingEnabled {
             let sourceForLog = sanitizedForLog(sourceText) ?? "(empty)"
             let promptForLog = sanitizedForLog(prompt) ?? "(empty)"
-            onDiagnosticEvent?(
-                "verbose model-input segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue), sourceChars=\(sourceText.count), promptChars=\(prompt.count), source=\(sourceForLog), prompt=\(promptForLog)"
-            )
+            onDiagnosticEvent?("verbose model-input segment=\(segmentIndex), sourceChars=\(sourceText.count), promptChars=\(prompt.count), source=\(sourceForLog), prompt=\(promptForLog)")
         }
         do {
             return try await translateSegment(
@@ -384,9 +409,7 @@ private enum FoundationModelsRuntimeTranslator {
                 onDiagnosticEvent: onDiagnosticEvent
             )
         } catch let error as FoundationModelsStructuredOutputError {
-            onDiagnosticEvent?(
-                "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): structured-output-no-retry-source-returned (\(error.localizedDescription))"
-            )
+            onDiagnosticEvent?("segment=\(segmentIndex): structured-output-no-retry-source-returned (\(error.localizedDescription))")
             return StructuredTranslationResult(
                 translation: sourceFallbackTranslation(
                     sourceText: sourceText
@@ -534,14 +557,12 @@ private enum FoundationModelsRuntimeTranslator {
 
     private static func instructions(for input: TranslationInput) -> String {
         """
-        You are a translation engine.
-        Translate from \(input.sourceLanguage) to \(input.targetLanguage).
-        Translate every sentence in the source text; do not omit any part.
-        Keep the same number of sentences as the source text.
-        Treat the source as HTML-like text.
-        STRICT REQUIREMENT: Preserve all `</br>` tokens exactly as in source (same count and order). Do not replace, remove, or add `</br>`.
-        Preserve meaning and punctuation structure whenever possible.
-        Do not include explanations, notes, or commentary.
+        You are a translation engine for \(input.sourceLanguage) -> \(input.targetLanguage).
+        Return translated text only.
+        Do not omit content.
+        Keep sentence count unchanged.
+        Preserve all `</br>` tokens exactly (same count and order).
+        Keep punctuation/structure when possible.
         """
     }
 
@@ -559,18 +580,12 @@ private enum FoundationModelsRuntimeTranslator {
 
     private static func promptForSegment(_ segment: TextSegment, input: TranslationInput) -> String {
         var lines: [String] = []
-        lines.append("Target language code: \(input.targetLanguage)")
-        lines.append("The source is HTML-like text.")
-        lines.append("STYLE REQUIREMENT: Preserve all `</br>` tokens exactly as in source (same count and order).")
-        lines.append("Translate every sentence in the source text; do not omit any part.")
-        lines.append("Keep the same number of sentences as the source text.")
-        lines.append("Important: translation must be translated source text only.")
+        lines.append("Translate this segment.")
 
         if !input.glossaryMatches.isEmpty {
             let glossaryLines = input.glossaryMatches
                 .map { "\($0.source)=\($0.target)" }
-            lines.append("")
-            lines.append("Glossary constraints (prefer exact target terms):")
+            lines.append("Glossary (prefer exact targets):")
             lines.append(contentsOf: glossaryLines)
         }
 
@@ -578,12 +593,10 @@ private enum FoundationModelsRuntimeTranslator {
             let protectedList = input.protectedTokens
                 .map(\.value)
                 .joined(separator: ", ")
-            lines.append("")
-            lines.append("Protected tokens (do not translate): \(protectedList)")
+            lines.append("Do not translate tokens: \(protectedList)")
         }
 
-        lines.append("")
-        lines.append("Source text:")
+        lines.append("Source:")
         lines.append(sourceTextForPrompt(segment.text))
         return lines.joined(separator: "\n")
     }
@@ -658,9 +671,7 @@ private enum FoundationModelsRuntimeTranslator {
                 onDiagnosticEvent: onDiagnosticEvent
             )
         } catch {
-            onDiagnosticEvent?(
-                "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): fallback-failed-source-returned (\(error.localizedDescription))"
-            )
+            onDiagnosticEvent?("segment=\(segmentIndex): fallback-failed-source-returned (\(error.localizedDescription))")
             return StructuredTranslationResult(
                 translation: sourceFallbackTranslation(
                     sourceText: sourceText
@@ -923,9 +934,7 @@ private enum FoundationModelsRuntimeTranslator {
         unsafeSegmentRecoveryEngine: UnsafeSegmentRecoveryEngine,
         onDiagnosticEvent: (@Sendable (_ message: String) -> Void)?
     ) async -> (translation: String, usedTranslationFrameworkRecovery: Bool) {
-        onDiagnosticEvent?(
-            "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): attempting-translation-framework-recovery"
-        )
+        onDiagnosticEvent?("segment=\(segmentIndex): attempting-translation-framework-recovery")
 
         if let recovered = await unsafeSegmentRecoveryEngine.recoverUnsafeTranslation(
             sourceText: sourceText,
@@ -937,15 +946,11 @@ private enum FoundationModelsRuntimeTranslator {
                 recovered,
                 sourceText: sourceText
             )
-            onDiagnosticEvent?(
-                "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): translation-framework-recovery-succeeded"
-            )
+            onDiagnosticEvent?("segment=\(segmentIndex): translation-framework-recovery-succeeded")
             return (completed, true)
         }
 
-        onDiagnosticEvent?(
-            "segment=\(segmentIndex), preprocess-kind=\(preprocessKind.rawValue): translation-framework-recovery-unavailable-source-returned"
-        )
+        onDiagnosticEvent?("segment=\(segmentIndex): translation-framework-recovery-unavailable-source-returned")
         return (sourceFallbackTranslation(sourceText: sourceText), false)
     }
 
@@ -966,6 +971,31 @@ private enum FoundationModelsRuntimeTranslator {
         let localized = error.localizedDescription.lowercased()
         return localized.contains("context window")
             || localized.contains("exceeded model context window size")
+    }
+
+    private static func shouldRefreshSessionProactively(
+        usedSegmentCount: Int,
+        usedEstimatedContextCost: Int,
+        nextPromptChars: Int
+    ) -> Bool {
+        guard usedSegmentCount > 0 else { return false }
+        if usedSegmentCount >= maxSegmentsPerSession {
+            return true
+        }
+        if nextPromptChars >= largePromptCharsThreshold {
+            return true
+        }
+        let nextEstimatedContextCost = estimatedContextCost(forPromptChars: nextPromptChars)
+        return usedEstimatedContextCost + nextEstimatedContextCost > maxEstimatedContextCostPerSession
+    }
+
+    private static func estimatedContextCost(forPromptChars promptChars: Int) -> Int {
+        // Rough budget heuristic:
+        // - prompt text itself
+        // - model response tokens
+        // - internal schema/instruction overhead
+        // Use a conservative multiplier to rotate before hard window failures.
+        (promptChars * 2) + 400
     }
 
     private static func sanitizedForLog(_ text: String?) -> String? {
