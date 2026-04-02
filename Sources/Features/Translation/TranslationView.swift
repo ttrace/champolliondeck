@@ -7,6 +7,12 @@ import SwiftUI
 #endif
 
 struct TranslationView: View {
+    #if os(iOS)
+    private enum FocusedField: Hashable {
+        case source
+    }
+    #endif
+
     // #region MARK: MARK:State
     @StateObject private var viewModel: TranslationViewModel
     @AppStorage("developerModeEnabled") private var developerModeEnabled: Bool = false
@@ -16,6 +22,9 @@ struct TranslationView: View {
     @State private var toastDismissTask: Task<Void, Never>?
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #if os(iOS)
+    @FocusState private var focusedField: FocusedField?
+    #endif
     // #endregion
 
     // #region MARK: Init
@@ -74,6 +83,14 @@ struct TranslationView: View {
         #if os(iOS)
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             handleSharedImportIfNeeded()
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    dismissKeyboard()
+                }
+            }
         }
         #endif
     }
@@ -295,6 +312,10 @@ struct TranslationView: View {
             }
 
             TextEditor(text: $viewModel.inputText)
+                #if os(iOS)
+                .focused($focusedField, equals: .source)
+                .scrollDismissesKeyboard(.interactively)
+                #endif
                 .scrollContentBackground(.hidden)
                 #if os(iOS)
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -350,6 +371,9 @@ struct TranslationView: View {
                 .disabled(viewModel.translatedText.isEmpty)
 
                 Button("Translate") {
+                    #if os(iOS)
+                    dismissKeyboard()
+                    #endif
                     Task { await viewModel.translate() }
                 }
                 .buttonStyle(.borderedProminent)
@@ -625,6 +649,16 @@ struct TranslationView: View {
 
     private var sharedImportToastTitle: String {
         isJapaneseLocale ? "共有テキストを取り込みました" : "Shared text imported."
+    }
+
+    private func dismissKeyboard() {
+        focusedField = nil
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
     #endif
 
