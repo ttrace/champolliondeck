@@ -21,6 +21,7 @@
 		B00000000000000000000010 /* Sources/Services/ClipboardDoubleCopyDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000A /* Sources/Services/ClipboardDoubleCopyDetector.swift */; };
 		B00000000000000000000011 /* Sources/Services/EnginePolicies.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000B /* Sources/Services/EnginePolicies.swift */; };
 		B00000000000000000000012 /* Sources/Services/TranslationOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000000C /* Sources/Services/TranslationOrchestrator.swift */; };
+		B00000000000000000000019 /* Sources/Services/TranslationFrameworkUnsafeRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0000000000000000000001C /* Sources/Services/TranslationFrameworkUnsafeRecovery.swift */; };
 		B00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000013 /* iOSApp/Base.lproj/LaunchScreen.storyboard */; };
 		B00000000000000000000014 /* iOSApp/Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000014 /* iOSApp/Settings.bundle */; };
 		B00000000000000000000015 /* iOSApp/Shared/SharedImportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00000000000000000000015 /* iOSApp/Shared/SharedImportStore.swift */; };
@@ -55,6 +56,8 @@
 
 /* Begin PBXFileReference section */
 		917E8CAA2F7B4E140077CE0A /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		917FF0602F7B7BF400FC81C9 /* PreBabelLensiOSRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PreBabelLensiOSRelease.entitlements; sourceTree = "<group>"; };
+		917FF0612F7B7C0A00FC81C9 /* PreBabelLensShareRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PreBabelLensShareRelease.entitlements; sourceTree = "<group>"; };
 		F00000000000000000000001 /* Sources/App/PreBabelLensApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/PreBabelLensApp.swift; sourceTree = SOURCE_ROOT; };
 		F00000000000000000000002 /* Sources/Domain/TranslationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Domain/TranslationModels.swift; sourceTree = SOURCE_ROOT; };
 		F00000000000000000000003 /* Sources/Domain/TranslationProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Domain/TranslationProtocols.swift; sourceTree = SOURCE_ROOT; };
@@ -80,6 +83,7 @@
 		F00000000000000000000017 /* iOSShareExtension/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = iOSShareExtension/Info.plist; sourceTree = SOURCE_ROOT; };
 		F00000000000000000000018 /* iOSShareExtension/ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSShareExtension/ShareViewController.swift; sourceTree = SOURCE_ROOT; };
 		F00000000000000000000019 /* iOSShareExtension/PreBabelLensShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = iOSShareExtension/PreBabelLensShare.entitlements; sourceTree = SOURCE_ROOT; };
+		F0000000000000000000001C /* Sources/Services/TranslationFrameworkUnsafeRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Services/TranslationFrameworkUnsafeRecovery.swift; sourceTree = SOURCE_ROOT; };
 		F0000000000000000000001B /* PreBabelLensShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PreBabelLensShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -104,6 +108,8 @@
 		G00000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				917FF0612F7B7C0A00FC81C9 /* PreBabelLensShareRelease.entitlements */,
+				917FF0602F7B7BF400FC81C9 /* PreBabelLensiOSRelease.entitlements */,
 				G00000000000000000000002,
 				G00000000000000000000003,
 				G00000000000000000000004 /* Products */,
@@ -125,6 +131,7 @@
 				F0000000000000000000000A /* Sources/Services/ClipboardDoubleCopyDetector.swift */,
 				F0000000000000000000000B /* Sources/Services/EnginePolicies.swift */,
 				F0000000000000000000000C /* Sources/Services/TranslationOrchestrator.swift */,
+				F0000000000000000000001C /* Sources/Services/TranslationFrameworkUnsafeRecovery.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -273,6 +280,7 @@
 				B00000000000000000000010 /* Sources/Services/ClipboardDoubleCopyDetector.swift in Sources */,
 				B00000000000000000000011 /* Sources/Services/EnginePolicies.swift in Sources */,
 				B00000000000000000000012 /* Sources/Services/TranslationOrchestrator.swift in Sources */,
+				B00000000000000000000019 /* Sources/Services/TranslationFrameworkUnsafeRecovery.swift in Sources */,
 				B00000000000000000000015 /* iOSApp/Shared/SharedImportStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -342,7 +350,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -391,7 +399,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -404,22 +412,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/PreBabelLensiOS.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ZLQNS38K47;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iOSApp/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.6.0;
+				MARKETING_VERSION = 0.6.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ttrace.prebabellens.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
@@ -431,7 +437,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = iOSApp/PreBabelLensiOS.entitlements;
+				CODE_SIGN_ENTITLEMENTS = PreBabelLensiOSRelease.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -439,12 +445,12 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iOSApp/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.6.0;
+				MARKETING_VERSION = 0.6.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ttrace.prebabellens.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -464,13 +470,13 @@
 				DEVELOPMENT_TEAM = ZLQNS38K47;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iOSShareExtension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.6.0;
+				MARKETING_VERSION = 0.6.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ttrace.prebabellens.ios.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -484,21 +490,23 @@
 		C00000000000000000000009 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = iOSShareExtension/PreBabelLensShare.entitlements;
+				CODE_SIGN_ENTITLEMENTS = PreBabelLensShareRelease.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ZLQNS38K47;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = iOSShareExtension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.6.0;
+				MARKETING_VERSION = 0.6.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ttrace.prebabellens.ios.share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;

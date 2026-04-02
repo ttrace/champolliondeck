@@ -25,6 +25,8 @@ Strategic direction update:
 - Avoid dictionary-heavy or purpose-specific deterministic algorithms unless strictly required for reliability/safety.
 - Foundation Models structured generation must prefer `@Generable` and `@Guide` schemas over prompt-defined JSON formats.
 - Minimize prompt engineering for structure; use prompts mainly for task intent/context while enforcing output shape via typed generation.
+- For iOS unsafe fallback recovery, prefer Apple OS Translation framework as a secondary translation engine before falling back to raw source text.
+- Treat Translation framework as a fast, stability-oriented recovery path for unsafe segments only; do not replace the main Foundation Models pipeline with it by default.
 
 ## Core Design Principles
 1. Do not tightly couple Foundation Models and Core ML.
@@ -44,6 +46,7 @@ Strategic direction update:
 4. Use Foundation Models as the primary heuristic layer.
    - Preferred for analysis, classification, hint generation, ambiguity detection, and adaptive preprocessing.
    - Keep deterministic fallbacks for resilience when model output is unavailable or unsafe.
+   - When Foundation Models output is unsafe, allow a secondary translation attempt through Apple Translation framework before source-text fallback.
 
 5. Optimize for observability.
    - Preserve intermediate analysis results
@@ -69,6 +72,10 @@ Expected abstractions:
 Suggested rule:
 - keep engine selection in a policy/facade layer
 - do not scatter engine-specific branching across views
+- fallback ordering for iOS translation should remain explicit and observable:
+  - primary: Foundation Models
+  - secondary for unsafe segments: Translation framework
+  - final fallback: original source text with UI indication
 
 ## Coding Rules
 - Use Swift for app code
@@ -153,6 +160,17 @@ Prefer tests for:
 - Preferred command for official release packaging: `scripts/build_notarized_release.sh`.
 - Use `NOTARY_PROFILE` keychain profile for notarization credentials when available.
 
+## iOS Release Branch Policy
+- Dedicated iOS release branch: `release/ios`
+- Purpose: prevent non-iOS commits on `main` (docs/scripts/mac-only changes) from triggering Xcode Cloud iOS release workflows.
+- Xcode Cloud release workflows should target `release/ios` as the primary trigger branch.
+- Day-to-day development may continue on feature branches and `main`, but iOS release candidates should be merged/cherry-picked into `release/ios` before cloud release runs.
+- Keep `release/ios` close to `main`; avoid long-lived divergence unless a hotfix requires temporary separation.
+- When releasing iOS:
+  1. Sync latest stable changes into `release/ios`.
+  2. Confirm version/build metadata on `release/ios`.
+  3. Trigger/verify Xcode Cloud from `release/ios`.
+
 ## Implementation Guidance for Codex
 When making changes:
 1. read surrounding code first
@@ -176,6 +194,7 @@ If a task is ambiguous, prefer the solution that:
 - improves observability
 - keeps preprocessing deterministic
 - avoids hidden LLM coupling
+- keeps Translation framework integration isolated to an engine/policy layer rather than embedding direct framework calls in views or view models
 
 ## Output Style for Agent Work
 When returning implementation summaries:
