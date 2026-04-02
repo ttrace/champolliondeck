@@ -38,9 +38,12 @@ final class TranslationViewModel: ObservableObject {
     @Published var userAlert: UserAlert?
     @Published var developerLogs: [String] = []
     @Published private(set) var status: TranslationStatus = .ready
+    @Published private(set) var targetLanguageOptions: [TargetLanguageOption] = []
+    @Published private(set) var isAppleIntelligenceAvailable: Bool = false
+    @Published private(set) var usesAppleIntelligenceTranslation: Bool = false
 
-    let targetLanguageOptions: [TargetLanguageOption]
     private let orchestrator: TranslationOrchestrator
+    private let iOSEnginePolicy: IOSAdaptiveTranslationEnginePolicy?
     private var shouldTranslateOnLaunch: Bool = false
     private var shouldActivateAppOnLaunch: Bool = false
     private var partialTranslationsBySegment: [Int: String] = [:]
@@ -56,15 +59,20 @@ final class TranslationViewModel: ObservableObject {
     private var activeMetricsSessionStartedAt: Date?
     private var activeMetricsFirstOutputAt: Date?
 
-    init(orchestrator: TranslationOrchestrator, launchInputText: String? = nil) {
-        let options = AppleIntelligenceLanguageCatalog.supportedLanguageOptions()
-        self.targetLanguageOptions = options
-        if options.contains(where: { $0.code == "ja" }) {
+    init(
+        orchestrator: TranslationOrchestrator,
+        iOSEnginePolicy: IOSAdaptiveTranslationEnginePolicy? = nil,
+        launchInputText: String? = nil
+    ) {
+        self.iOSEnginePolicy = iOSEnginePolicy
+        let initialOptions = AppleIntelligenceLanguageCatalog.translationFrameworkLanguageOptions()
+        if initialOptions.contains(where: { $0.code == "ja" }) {
             self.targetLanguage = "ja"
         } else {
-            self.targetLanguage = options.first?.code ?? "en"
+            self.targetLanguage = initialOptions.first?.code ?? "en"
         }
         self.orchestrator = orchestrator
+        refreshEnginePreference()
 
         if let launchInputText {
             let trimmed = launchInputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -95,6 +103,35 @@ final class TranslationViewModel: ObservableObject {
 
     func handleDoubleCopyText(_ text: String) async {
         await handleExternalTriggerText(text, source: "double-copy")
+    }
+
+    func refreshEnginePreference() {
+        guard let iOSEnginePolicy else {
+            isAppleIntelligenceAvailable = false
+            usesAppleIntelligenceTranslation = false
+            targetLanguageOptions = AppleIntelligenceLanguageCatalog.translationFrameworkLanguageOptions()
+            normalizeTargetLanguageSelection()
+            return
+        }
+
+        isAppleIntelligenceAvailable = iOSEnginePolicy.isFoundationModelsAvailable()
+        usesAppleIntelligenceTranslation = iOSEnginePolicy.currentPreferredMode() == .foundationModels && isAppleIntelligenceAvailable
+        targetLanguageOptions = usesAppleIntelligenceTranslation
+            ? AppleIntelligenceLanguageCatalog.supportedLanguageOptions()
+            : AppleIntelligenceLanguageCatalog.translationFrameworkLanguageOptions()
+        normalizeTargetLanguageSelection()
+    }
+
+    func switchToAppleIntelligenceTranslation() {
+        guard let iOSEnginePolicy else { return }
+        iOSEnginePolicy.setPreferredMode(.foundationModels)
+        refreshEnginePreference()
+    }
+
+    func switchToStandardTranslation() {
+        guard let iOSEnginePolicy else { return }
+        iOSEnginePolicy.setPreferredMode(.translationFramework)
+        refreshEnginePreference()
     }
 
     #if os(iOS)
@@ -145,6 +182,18 @@ final class TranslationViewModel: ObservableObject {
                 self?.appendDeveloperLog("Previous translation task drained after stop.")
             }
         }
+    }
+
+    private func normalizeTargetLanguageSelection() {
+        guard !targetLanguageOptions.isEmpty else { return }
+        if targetLanguageOptions.contains(where: { $0.code == targetLanguage }) {
+            return
+        }
+        if let japanese = targetLanguageOptions.first(where: { $0.code == "ja" }) {
+            targetLanguage = japanese.code
+            return
+        }
+        targetLanguage = targetLanguageOptions[0].code
     }
 
     private func runManagedTranslation() async {
@@ -377,6 +426,21 @@ final class TranslationViewModel: ObservableObject {
                     ? "Apple Intelligence の設定またはダウンロードを確認してください。"
                     : "Check Apple Intelligence settings and model downloads.",
                 offersSettingsShortcut: true
+            )
+        }
+
+        if localizedDescription.contains("language-pack download")
+            || localizedDescription.contains("Translation Framework could not complete translation")
+        {
+            return UserAlert(
+                title: isJapaneseLocale ? "翻訳言語データを確認してください" : "Check Translation Language Data",
+                message: isJapaneseLocale
+                    ? "ダウンロードの状況はSettingsで確認できます。ダウンロードが終わってから再度起動してください。"
+                    : "You can check download status in Settings. After the download finishes, relaunch the app and try again.",
+                inlineMessage: isJapaneseLocale
+                    ? "Settingsでダウンロード状況を確認し、完了後に再起動してください。"
+                    : "Check download status in Settings, then relaunch after completion.",
+                offersSettingsShortcut: false
             )
         }
 

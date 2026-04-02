@@ -33,8 +33,10 @@ struct TranslationOrchestrator: Sendable {
         let preprocessResult = preprocessEngine.analyze(request)
         let input = preprocessResult.input
         let engine = enginePolicy.resolveEngine(for: request)
+        let requiresAppleIntelligenceLanguageSupport = engine.name.contains("foundation-models")
 
-        if !input.isDetectedLanguageSupportedByAppleIntelligence,
+        if requiresAppleIntelligenceLanguageSupport,
+           !input.isDetectedLanguageSupportedByAppleIntelligence,
            let languageCode = input.detectedLanguageCode {
             throw TranslationPipelineError.unsupportedAppleIntelligenceLanguage(
                 detectedLanguageCode: languageCode

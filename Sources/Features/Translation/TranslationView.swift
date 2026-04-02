@@ -216,7 +216,7 @@ struct TranslationView: View {
                 Text("Pre-Babel Lens")
                     .font(.system(size: 32, weight: .black, design: .serif))
                     .minimumScaleFactor(0.8)
-                Text("LOCAL LLM TRANSLATOR")
+                Text("LOCAL TRANSLATOR")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .kerning(3)
                     .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
@@ -256,6 +256,23 @@ struct TranslationView: View {
                 .lineLimit(1)
         } else {
             Menu {
+                if viewModel.isAppleIntelligenceAvailable {
+                    Button(
+                        viewModel.usesAppleIntelligenceTranslation
+                            ? "標準翻訳に戻す"
+                            : "AI翻訳に切り替え"
+                    ) {
+                        if viewModel.usesAppleIntelligenceTranslation {
+                            viewModel.switchToStandardTranslation()
+                        } else {
+                            viewModel.switchToAppleIntelligenceTranslation()
+                        }
+                    }
+                } else {
+                    Button("AI翻訳はこのデバイスで利用できません") { }
+                        .disabled(true)
+                }
+                Divider()
                 ForEach(viewModel.targetLanguageOptions) { option in
                     Button(option.menuLabel(showCode: developerModeEnabled)) {
                         viewModel.targetLanguage = option.code
@@ -781,10 +798,12 @@ private extension View {
         #elseif os(iOS)
         self
             .task {
+                viewModel.refreshEnginePreference()
                 handleSharedImportIfNeeded()
                 await viewModel.translateIfNeededOnLaunch()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                viewModel.refreshEnginePreference()
                 handleSharedImportIfNeeded()
             }
             .alert(item: Binding(get: { viewModel.userAlert }, set: { _ in viewModel.dismissUserAlert() })) { alert in

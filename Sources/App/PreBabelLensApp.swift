@@ -23,11 +23,17 @@ struct PreBabelLens: App {
         let preprocess = DeterministicPreprocessEngine()
 #if canImport(Translation)
         let unsafeRecoveryController = TranslationFrameworkUnsafeRecoveryController()
-        let translationEngine = FoundationModelsTranslationEngine(
+        let hybridEngine = FoundationModelsTranslationEngine(
             unsafeSegmentRecoveryEngine: unsafeRecoveryController
         )
+        let translationFrameworkEngine = TranslationFrameworkPrimaryTranslationEngine(
+            recoveryEngine: unsafeRecoveryController
+        )
         self.unsafeRecoveryController = unsafeRecoveryController
-        let policy = FixedTranslationEnginePolicy(engine: translationEngine)
+        let policy = IOSAdaptiveTranslationEnginePolicy(
+            translationFrameworkEngine: translationFrameworkEngine,
+            hybridEngine: hybridEngine
+        )
         let launchInputText = Self.launchInputText()
 
         self.viewModel = TranslationViewModel(
@@ -35,6 +41,7 @@ struct PreBabelLens: App {
                 preprocessEngine: preprocess,
                 enginePolicy: policy
             ),
+            iOSEnginePolicy: policy,
             launchInputText: launchInputText
         )
 #else

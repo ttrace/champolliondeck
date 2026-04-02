@@ -27,13 +27,26 @@ final class TranslationViewController: UIViewController {
         let preprocess = DeterministicPreprocessEngine()
 #if canImport(Translation) && canImport(SwiftUI)
         let unsafeRecoveryController = TranslationFrameworkUnsafeRecoveryController()
-        let translationEngine = FoundationModelsTranslationEngine(
+        let hybridEngine = FoundationModelsTranslationEngine(
             unsafeSegmentRecoveryEngine: unsafeRecoveryController
         )
+        let translationFrameworkEngine = TranslationFrameworkPrimaryTranslationEngine(
+            recoveryEngine: unsafeRecoveryController
+        )
+        let policy = IOSAdaptiveTranslationEnginePolicy(
+            translationFrameworkEngine: translationFrameworkEngine,
+            hybridEngine: hybridEngine
+        )
         self.unsafeRecoveryController = unsafeRecoveryController
+        self.viewModel = TranslationViewModel(
+            orchestrator: TranslationOrchestrator(
+                preprocessEngine: preprocess,
+                enginePolicy: policy
+            ),
+            iOSEnginePolicy: policy
+        )
 #else
         let translationEngine = FoundationModelsTranslationEngine()
-#endif
         let policy = FixedTranslationEnginePolicy(engine: translationEngine)
         self.viewModel = TranslationViewModel(
             orchestrator: TranslationOrchestrator(
@@ -41,6 +54,7 @@ final class TranslationViewController: UIViewController {
                 enginePolicy: policy
             )
         )
+#endif
         super.init(coder: coder)
     }
 
@@ -101,6 +115,8 @@ final class TranslationViewController: UIViewController {
 
     @objc private func handleDidBecomeActive() {
         importSharedTextIfNeeded()
+        viewModel.refreshEnginePreference()
+        refreshLanguageMenu()
     }
 
     func applyImportedInput(_ text: String) {
@@ -183,6 +199,13 @@ final class TranslationViewController: UIViewController {
                 self?.refreshLanguageMenu()
             }
             .store(in: &cancellables)
+
+        viewModel.$targetLanguageOptions
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshLanguageMenu()
+            }
+            .store(in: &cancellables)
     }
 
 #if canImport(Translation) && canImport(SwiftUI)
@@ -209,7 +232,7 @@ final class TranslationViewController: UIViewController {
 #endif
 
     private func refreshLanguageMenu() {
-        let options = viewModel.targetLanguageOptions
+        let options = currentTargetLanguageOptions()
         guard !options.isEmpty else {
             targetLanguageButton.isEnabled = false
             targetLanguageButton.setTitle("No target languages", for: .normal)
@@ -217,7 +240,9 @@ final class TranslationViewController: UIViewController {
             return
         }
 
-        let actions = options.map { option in
+        var actions: [UIMenuElement] = [engineSwitchAction()]
+
+        let languageActions = options.map { option in
             UIAction(
                 title: option.menuLabel(showCode: false),
                 state: option.code == viewModel.targetLanguage ? .on : .off
@@ -227,6 +252,7 @@ final class TranslationViewController: UIViewController {
                 self.refreshLanguageMenu()
             }
         }
+        actions.append(contentsOf: languageActions)
 
         targetLanguageButton.isEnabled = true
         targetLanguageButton.menu = UIMenu(title: "Target", children: actions)
@@ -236,6 +262,31 @@ final class TranslationViewController: UIViewController {
         } else {
             targetLanguageButton.setTitle(options[0].menuLabel(showCode: false), for: .normal)
             viewModel.targetLanguage = options[0].code
+        }
+    }
+
+    private func currentTargetLanguageOptions() -> [TargetLanguageOption] {
+        viewModel.targetLanguageOptions
+    }
+
+    private func engineSwitchAction() -> UIAction {
+        guard viewModel.isAppleIntelligenceAvailable else {
+            return UIAction(
+                title: "AI翻訳はこのデバイスで利用できません",
+                attributes: [.disabled]
+            ) { _ in }
+        }
+
+        let isFoundationModelsMode = viewModel.usesAppleIntelligenceTranslation
+        let title = isFoundationModelsMode ? "標準翻訳に戻す" : "AI翻訳に切り替え"
+        return UIAction(title: title) { [weak self] _ in
+            guard let self else { return }
+            if isFoundationModelsMode {
+                self.viewModel.switchToStandardTranslation()
+            } else {
+                self.viewModel.switchToAppleIntelligenceTranslation()
+            }
+            self.refreshLanguageMenu()
         }
     }
 }
