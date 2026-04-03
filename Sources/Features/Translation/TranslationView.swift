@@ -790,10 +790,14 @@ private extension View {
         self
             .frame(minHeight: 680)
             .task {
+                viewModel.refreshEnginePreference()
                 if viewModel.consumeLaunchActivationRequest() {
                     NSApp.activate(ignoringOtherApps: true)
                 }
                 await viewModel.translateIfNeededOnLaunch()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                viewModel.refreshEnginePreference()
             }
         #elseif os(iOS)
         self

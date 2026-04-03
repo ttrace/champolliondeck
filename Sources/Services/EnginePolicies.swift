@@ -35,16 +35,12 @@ final class IOSAdaptiveTranslationEnginePolicy: TranslationEnginePolicy, @unchec
     }
 
     func resolveEngine(for _: TranslationRequest) -> TranslationEngine {
-        #if os(iOS)
         lock.lock()
         defer { lock.unlock() }
         if preferredMode == .foundationModels, isFoundationModelsReady {
             return hybridEngine
         }
         return translationFrameworkEngine
-        #else
-        return hybridEngine
-        #endif
     }
 
     func setPreferredMode(_ mode: IOSPreferredTranslationEngineMode) {
