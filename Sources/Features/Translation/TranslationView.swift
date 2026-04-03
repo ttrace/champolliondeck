@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UniformTypeIdentifiers)
+    import UniformTypeIdentifiers
+#endif
 
 #if os(macOS)
     import AppKit
@@ -29,6 +32,9 @@ struct TranslationView: View {
     @State private var toastDismissTask: Task<Void, Never>?
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #if os(macOS)
+    @State private var isSourceDropTargeted: Bool = false
+    #endif
     #if os(iOS)
     @FocusState private var focusedField: FocusedField?
     #endif
@@ -410,6 +416,14 @@ struct TranslationView: View {
                     colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.4),
                     in: RoundedRectangle(cornerRadius: editorCornerRadius)
                 )
+                .onDrop(of: sourceDropTypeIdentifiers, isTargeted: $isSourceDropTargeted, perform: handleSourceDrop)
+                .overlay(
+                    RoundedRectangle(cornerRadius: editorCornerRadius)
+                        .strokeBorder(
+                            Color.accentColor.opacity(isSourceDropTargeted ? 0.75 : 0.0),
+                            style: StrokeStyle(lineWidth: 2, dash: [6, 4])
+                        )
+                )
                 #endif
 
         }
@@ -700,6 +714,45 @@ struct TranslationView: View {
     }
     // #endregion
 
+    #if os(macOS)
+    private var sourceDropTypeIdentifiers: [String] {
+        [
+            UTType.plainText.identifier,
+            UTType.utf8PlainText.identifier,
+            UTType.utf16PlainText.identifier,
+            UTType.fileURL.identifier,
+        ]
+    }
+
+    private func handleSourceDrop(providers: [NSItemProvider]) -> Bool {
+        if let textProvider = providers.first(where: { $0.canLoadObject(ofClass: NSString.self) }) {
+            textProvider.loadObject(ofClass: NSString.self) { droppedObject, _ in
+                guard let droppedText = droppedObject as? NSString else { return }
+                let text = String(droppedText)
+                Task { @MainActor in
+                    guard !text.isEmpty else { return }
+                    viewModel.inputText = text
+                }
+            }
+            return true
+        }
+
+        guard let fileProvider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }) else {
+            return false
+        }
+
+        fileProvider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+            guard let fileURL = SourceDropImport.fileURL(from: item) else { return }
+            guard let text = SourceDropImport.loadText(from: fileURL) else { return }
+            Task { @MainActor in
+                guard !text.isEmpty else { return }
+                viewModel.inputText = text
+            }
+        }
+        return true
+    }
+    #endif
+
     #if os(iOS)
     @ViewBuilder
     private func importToast(text: String) -> some View {
@@ -775,6 +828,38 @@ private struct TranslationUnsafeRecoveryTaskHost: View {
             .translationTask(configuration) { session in
                 await unsafeRecoveryController.processPendingRequest(using: session)
             }
+    }
+}
+#endif
+
+#if os(macOS)
+private enum SourceDropImport {
+    static func fileURL(from item: NSSecureCoding?) -> URL? {
+        if let url = item as? URL {
+            return url
+        }
+        if let data = item as? Data {
+            return URL(dataRepresentation: data, relativeTo: nil)
+        }
+        if let string = item as? String {
+            return URL(string: string)
+        }
+        return nil
+    }
+
+    static func loadText(from fileURL: URL) -> String? {
+        let hasSecurityScope = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if hasSecurityScope {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        var encoding: UInt = 0
+        if let text = try? NSString(contentsOf: fileURL, usedEncoding: &encoding) {
+            return text as String
+        }
+        return nil
     }
 }
 #endif
