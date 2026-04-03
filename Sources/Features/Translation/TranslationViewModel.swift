@@ -380,6 +380,78 @@ final class TranslationViewModel: ObservableObject {
             )
         }
 
+        if localizedDescription.contains("language-pack download")
+            || localizedDescription.contains("Translation Framework could not complete translation")
+        {
+            let languagePair = extractLanguagePair(from: localizedDescription)
+            let recoveryFailureKind = extractRecoveryFailureKind(from: localizedDescription)
+            if let languagePair, normalizedLanguageCode(languagePair.source) == normalizedLanguageCode(languagePair.target) {
+                let pairLabel = "\(languagePair.source) -> \(languagePair.target)"
+                return UserAlert(
+                    title: isJapaneseLocale ? "同一言語ペアです" : "Same Language Pair",
+                    message: isJapaneseLocale
+                        ? "入力言語と出力言語が同じペアになっています（\(pairLabel)）。別の出力言語を選択して再実行してください。"
+                        : "The source and target language are the same (\(pairLabel)). Select a different target language and try again.",
+                    inlineMessage: isJapaneseLocale
+                        ? "同一言語ペア（\(pairLabel)）のため翻訳できません。"
+                        : "Cannot translate with the same language pair (\(pairLabel)).",
+                    offersSettingsShortcut: false
+                )
+            }
+
+            if let languagePair {
+                let source = languagePair.source
+                let target = languagePair.target
+                switch recoveryFailureKind {
+                case "missing_source_language":
+                    return UserAlert(
+                        title: isJapaneseLocale ? "翻訳言語データを確認してください" : "Check Translation Language Data",
+                        message: isJapaneseLocale
+                            ? "\(source) がありません。Settingsでダウンロード状況を確認し、完了後に再起動してから再実行してください。"
+                            : "\(source) is unavailable. Check download status in Settings, then relaunch and try again.",
+                        inlineMessage: isJapaneseLocale
+                            ? "\(source) がありません。"
+                            : "\(source) is unavailable.",
+                        offersSettingsShortcut: false
+                    )
+                case "missing_target_language":
+                    return UserAlert(
+                        title: isJapaneseLocale ? "翻訳言語データを確認してください" : "Check Translation Language Data",
+                        message: isJapaneseLocale
+                            ? "\(target) がありません。Settingsでダウンロード状況を確認し、完了後に再起動してから再実行してください。"
+                            : "\(target) is unavailable. Check download status in Settings, then relaunch and try again.",
+                        inlineMessage: isJapaneseLocale
+                            ? "\(target) がありません。"
+                            : "\(target) is unavailable.",
+                        offersSettingsShortcut: false
+                    )
+                case "missing_source_and_target_language":
+                    return UserAlert(
+                        title: isJapaneseLocale ? "翻訳言語データを確認してください" : "Check Translation Language Data",
+                        message: isJapaneseLocale
+                            ? "\(source) と \(target) がありません。Settingsでダウンロード状況を確認し、完了後に再起動してから再実行してください。"
+                            : "\(source) and \(target) are unavailable. Check download status in Settings, then relaunch and try again.",
+                        inlineMessage: isJapaneseLocale
+                            ? "\(source) と \(target) がありません。"
+                            : "\(source) and \(target) are unavailable.",
+                        offersSettingsShortcut: false
+                    )
+                default:
+                    break
+                }
+            }
+
+            return UserAlert(
+                title: isJapaneseLocale ? "翻訳言語データを確認してください" : "Check Translation Language Data",
+                message: isJapaneseLocale
+                    ? "対象の言語ペアが利用できません。Settingsでダウンロード状況を確認し、完了後に再起動してから再実行してください。"
+                    : "The required language pair is unavailable. Check download status in Settings, then relaunch and try again.",
+                inlineMessage: isJapaneseLocale
+                    ? "言語データのダウンロード状況をSettingsで確認してください。"
+                    : "Check language data download status in Settings.",
+                offersSettingsShortcut: false
+            )
+        }
         return nil
     }
 
@@ -489,6 +561,43 @@ final class TranslationViewModel: ObservableObject {
     private func milliseconds(from start: Date?, to end: Date) -> String {
         guard let start else { return "(n/a)" }
         return String(format: "%.2f ms", end.timeIntervalSince(start) * 1_000)
+    }
+
+    private func extractLanguagePair(from message: String) -> (source: String, target: String)? {
+        guard let pairRangeStart = message.lastIndex(of: "("),
+              let pairRangeEnd = message[pairRangeStart...].firstIndex(of: ")"),
+              pairRangeStart < pairRangeEnd else {
+            return nil
+        }
+
+        let pairBody = String(message[message.index(after: pairRangeStart)..<pairRangeEnd])
+        let parts = pairBody.components(separatedBy: "->")
+        guard parts.count == 2 else { return nil }
+
+        let source = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+        let target = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty, !target.isEmpty else { return nil }
+        return (source: source, target: target)
+    }
+
+    private func extractRecoveryFailureKind(from message: String) -> String? {
+        let marker = "reason="
+        guard let range = message.range(of: marker) else { return nil }
+        let suffix = message[range.upperBound...]
+        let token = suffix.split(separator: " ").first.map(String.init)?.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        guard let token, !token.isEmpty else { return nil }
+        return token
+    }
+
+    private func normalizedLanguageCode(_ code: String) -> String {
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let hyphenIndex = trimmed.firstIndex(of: "-") {
+            return String(trimmed[..<hyphenIndex])
+        }
+        if let underscoreIndex = trimmed.firstIndex(of: "_") {
+            return String(trimmed[..<underscoreIndex])
+        }
+        return trimmed
     }
 
 }
