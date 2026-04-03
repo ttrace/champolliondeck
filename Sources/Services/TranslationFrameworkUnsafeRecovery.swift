@@ -8,6 +8,13 @@ import Logging
 
 @MainActor
 final class TranslationFrameworkUnsafeRecoveryController: ObservableObject, UnsafeSegmentRecoveryEngine, @unchecked Sendable {
+    private enum MissingLanguageKind: String {
+        case source = "missing_source_language"
+        case target = "missing_target_language"
+        case sourceAndTarget = "missing_source_and_target_language"
+        case unsupportedPair = "unsupported_language_pairing"
+    }
+
     #if canImport(Logging)
     private static let logger = Logger(subsystem: "com.ttrace.prebabellens", category: "translation-framework")
     #endif
@@ -89,6 +96,16 @@ final class TranslationFrameworkUnsafeRecoveryController: ObservableObject, Unsa
 
             if status == .unsupported {
                 log("unsupported-language-pairing")
+                if let missingLanguageKind = await diagnoseMissingLanguageKind(
+                    sourceLanguage: request.sourceLanguage,
+                    targetLanguage: request.targetLanguage,
+                    using: availability
+                ) {
+                    request.onDiagnosticEvent?(
+                        "translation-framework-recovery:failure-kind=\(missingLanguageKind.rawValue)"
+                    )
+                    log("failure-kind=\(missingLanguageKind.rawValue)")
+                }
                 finishPendingRequest(with: nil)
                 return
             }
@@ -193,7 +210,30 @@ final class TranslationFrameworkUnsafeRecoveryController: ObservableObject, Unsa
     private func localeLanguage(from code: String) -> Locale.Language? {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed.lowercased() != "und" else { return nil }
-        return Locale.Language(identifier: trimmed)
+        return Locale.Language(identifier: canonicalTranslationFrameworkLanguageIdentifier(from: trimmed))
+    }
+
+    private func canonicalTranslationFrameworkLanguageIdentifier(from rawCode: String) -> String {
+        let normalized = rawCode
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: "-")
+            .lowercased()
+
+        // Translation.framework can treat generic "en" as unavailable even when
+        // regional English assets (en-US / en-GB) are present.
+        if normalized == "en" {
+            return "en-US"
+        }
+
+        if normalized == "zh" || normalized == "zh-cn" || normalized == "zh-sg" {
+            return "zh-Hans"
+        }
+
+        if normalized == "zh-tw" || normalized == "zh-hk" || normalized == "zh-mo" {
+            return "zh-Hant"
+        }
+
+        return rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func describe(_ status: LanguageAvailability.Status) -> String {
@@ -207,6 +247,34 @@ final class TranslationFrameworkUnsafeRecoveryController: ObservableObject, Unsa
         @unknown default:
             return "unknown"
         }
+    }
+
+    private func diagnoseMissingLanguageKind(
+        sourceLanguage: String,
+        targetLanguage: String,
+        using availability: LanguageAvailability
+    ) async -> MissingLanguageKind? {
+        guard let source = localeLanguage(from: sourceLanguage),
+              let target = localeLanguage(from: targetLanguage) else {
+            return nil
+        }
+
+        let sourceStatus = await availability.status(from: source, to: nil)
+        let targetStatus = await availability.status(from: target, to: nil)
+
+        let sourceMissing = sourceStatus != .installed
+        let targetMissing = targetStatus != .installed
+
+        if sourceMissing && targetMissing {
+            return .sourceAndTarget
+        }
+        if sourceMissing {
+            return .source
+        }
+        if targetMissing {
+            return .target
+        }
+        return .unsupportedPair
     }
 }
 #endif
