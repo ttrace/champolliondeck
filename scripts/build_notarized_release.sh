@@ -80,7 +80,7 @@ cat > "${BUNDLE_DIR}/Contents/Info.plist" <<PLIST
   <key>CFBundleVersion</key>
   <string>${BUILD_NUMBER}</string>
   <key>LSMinimumSystemVersion</key>
-  <string>14.0</string>
+  <string>26.0</string>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>CFBundleLocalizations</key>
@@ -117,26 +117,20 @@ ditto -c -k --sequesterRsrc --keepParent "${BUNDLE_DIR}" "${ZIP_PATH}"
 
 echo "Preparing DMG contents..."
 mkdir -p "${DMG_STAGING_DIR}"
-cp -R "${BUNDLE_DIR}" "${DMG_STAGING_DIR}/${APP_NAME}.app"
+ditto "${BUNDLE_DIR}" "${DMG_STAGING_DIR}/${APP_NAME}.app"
+ln -sfn /Applications "${DMG_STAGING_DIR}/Applications"
 
-if command -v osascript >/dev/null 2>&1; then
-  if ! osascript \
-    -e 'tell application "Finder"' \
-    -e 'set targetFolder to POSIX file "/Applications"' \
-    -e 'set destinationFolder to POSIX file "'"${DMG_STAGING_DIR}"'"' \
-    -e 'if not (exists alias file "Applications" of folder destinationFolder) then make new alias file at folder destinationFolder to targetFolder with properties {name:"Applications"}' \
-    -e 'end tell'
-  then
-    ln -s /Applications "${DMG_STAGING_DIR}/Applications"
-  fi
-else
-  ln -s /Applications "${DMG_STAGING_DIR}/Applications"
+# Finder automation and provenance xattrs can trigger TCC-denied copy errors
+# while hdiutil populates /Volumes/<name>. Strip non-essential xattrs first.
+if command -v xattr >/dev/null 2>&1; then
+  xattr -rc "${DMG_STAGING_DIR}" || true
 fi
 
 echo "Creating DMG..."
 hdiutil create \
   -volname "Pre-Babel Lens" \
   -srcfolder "${DMG_STAGING_DIR}" \
+  -anyowners \
   -ov \
   -format UDZO \
   "${DMG_PATH}"

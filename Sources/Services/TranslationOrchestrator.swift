@@ -32,6 +32,53 @@ struct TranslationOrchestrator: Sendable {
     ) async throws -> TranslationOutput {
         let preprocessResult = preprocessEngine.analyze(request)
         let input = preprocessResult.input
+        let effectiveSourceLanguage = input.detectedLanguageCode ?? input.sourceLanguage
+        let isSameLanguagePair = isSameLanguagePair(
+            sourceLanguage: effectiveSourceLanguage,
+            targetLanguage: input.targetLanguage
+        )
+
+        if isSameLanguagePair {
+            onDiagnosticEvent?(
+                "engine=fallback-same-language source=\(effectiveSourceLanguage) target=\(input.targetLanguage)"
+            )
+
+            let segments = input.segments.isEmpty
+                ? [TextSegment(index: 0, text: input.originalText, role: .leading)]
+                : input.segments
+            let segmentOutputs = segments.map { segment in
+                SegmentOutput(
+                    segmentIndex: segment.index,
+                    sourceText: segment.text,
+                    translatedText: segment.text,
+                    isUnsafeFallback: true,
+                    isUnsafeRecoveredByTranslationFramework: false
+                )
+            }
+            for output in segmentOutputs {
+                onPartialSegmentResult?(output.segmentIndex, output.translatedText, input.segmentJoinersAfter)
+            }
+
+            let traces = preprocessResult.traces + [
+                PreprocessTrace(
+                    step: "same-language-fallback",
+                    summary: "source=\(effectiveSourceLanguage), target=\(input.targetLanguage)"
+                )
+            ]
+
+            return TranslationOutput(
+                translatedText: input.originalText,
+                containsUnsafeFallback: true,
+                segmentOutputs: segmentOutputs,
+                analysis: TranslationAnalysis(
+                    request: request,
+                    traces: traces,
+                    input: input,
+                    engineName: "same-language-fallback"
+                )
+            )
+        }
+
         let engine = enginePolicy.resolveEngine(for: request)
         let requiresAppleIntelligenceLanguageSupport = engine.name.contains("foundation-models")
 
@@ -156,5 +203,21 @@ struct TranslationOrchestrator: Sendable {
         }
 
         return max(1, count)
+    }
+
+    private func isSameLanguagePair(sourceLanguage: String, targetLanguage: String) -> Bool {
+        let source = normalizedLanguageIdentifier(sourceLanguage)
+        let target = normalizedLanguageIdentifier(targetLanguage)
+        guard !source.isEmpty, !target.isEmpty, source != "und", target != "und" else {
+            return false
+        }
+        return source == target
+    }
+
+    private func normalizedLanguageIdentifier(_ code: String) -> String {
+        code
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
     }
 }
