@@ -31,6 +31,7 @@ struct TranslationView: View {
     @AppStorage("autoTranslateImportedTextEnabled") private var autoTranslateImportedTextEnabled: Bool = false
     @State private var importToastMessage: String?
     @State private var toastDismissTask: Task<Void, Never>?
+    @State private var isMacCompactLayoutActive: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #if os(iOS)
@@ -195,21 +196,52 @@ struct TranslationView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         #else
-        VStack(alignment: .leading, spacing: 18) {
-            desktopHeader
+        GeometryReader { proxy in
+            let isCompactDesktopLayout = proxy.size.width < desktopRegularLayoutThreshold
+            let contentTopPadding: CGFloat = 8
+            let contentBottomPadding: CGFloat = 2
+            let verticalGap: CGFloat = 14
+            let headerReservedHeight: CGFloat = 64
+            let availableHeight = max(
+                0,
+                proxy.size.height - contentTopPadding - contentBottomPadding - headerReservedHeight
+            )
+            let splitHeight = max(170, (availableHeight - verticalGap) / 2)
 
-            HStack(alignment: .top, spacing: 18) {
-                sourceCard
-                outputCard
+            VStack(alignment: .leading, spacing: isCompactDesktopLayout ? 14 : 18) {
+                desktopHeader
+
+                if isCompactDesktopLayout {
+                    VStack(alignment: .leading, spacing: verticalGap) {
+                        sourceCard
+                            .frame(height: splitHeight)
+                        outputCard
+                            .frame(height: splitHeight)
+                    }
+                } else {
+                    HStack(alignment: .top, spacing: 18) {
+                        sourceCard
+                        outputCard
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                }
+
+                if developerModeEnabled {
+                    developerPanels
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.horizontal, isCompactDesktopLayout ? 12 : 36)
+            .padding(.top, contentTopPadding)
+            .padding(.bottom, contentBottomPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-
-            if developerModeEnabled {
-                developerPanels
+            .onAppear {
+                isMacCompactLayoutActive = isCompactDesktopLayout
+            }
+            .onChange(of: proxy.size.width) { _, newWidth in
+                isMacCompactLayoutActive = newWidth < desktopRegularLayoutThreshold
             }
         }
-        .padding(36)
-        .frame(minWidth: 1000)
         #endif
     }
 
@@ -226,7 +258,9 @@ struct TranslationView: View {
                     .foregroundStyle(Color(red: 0.20, green: 0.35, blue: 0.30))
             }
             Spacer()
-            languagePicker
+            if !usesCompactDesktopLayout {
+                languagePicker
+            }
             settingsMenu(iconSize: 24, frameSize: 64)
         }
         .padding(.top, 8)
@@ -280,7 +314,7 @@ struct TranslationView: View {
     }
 
     @ViewBuilder
-    private var iOSLanguageMenu: some View {
+    private var inlineLanguageMenu: some View {
         if viewModel.targetLanguageOptions.isEmpty {
             Text("No target")
                 .foregroundStyle(.secondary)
@@ -411,6 +445,18 @@ struct TranslationView: View {
         false
         #endif
     }
+
+    private var usesCompactDesktopLayout: Bool {
+        #if os(macOS)
+        isMacCompactLayoutActive
+        #else
+        false
+        #endif
+    }
+
+    private var desktopRegularLayoutThreshold: CGFloat {
+        1000
+    }
     // #endregion
 
     // #region MARK: Subviews
@@ -479,9 +525,9 @@ struct TranslationView: View {
                 Text("Output")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                 Spacer()
-                #if os(iOS)
-                    iOSLanguageMenu
-                #endif
+                if usesInlineLanguageMenuInOutputCard {
+                    inlineLanguageMenu
+                }
 
                 Button {
                     copyOutputToClipboard()
@@ -613,6 +659,16 @@ struct TranslationView: View {
         return viewModel.segmentJoinersAfter[index]
     }
     // #endregion
+
+    private var usesInlineLanguageMenuInOutputCard: Bool {
+        #if os(iOS)
+        true
+        #elseif os(macOS)
+        usesCompactDesktopLayout
+        #else
+        false
+        #endif
+    }
 
     private var cardOuterPadding: CGFloat {
         #if os(iOS)
