@@ -19,6 +19,11 @@ struct TranslationView: View {
     private enum FocusedField: Hashable {
         case source
     }
+
+    private enum PinchOverlayHost {
+        case source
+        case output
+    }
     #endif
 
     // #region MARK: MARK:State
@@ -36,8 +41,8 @@ struct TranslationView: View {
     @State private var isIOSDesktopLayoutActive: Bool = false
     #if os(iOS)
     @State private var pinchBaseFontScaleLevel: Int?
+    @State private var pinchOverlayHost: PinchOverlayHost?
     @State private var pinchOverlayText: String?
-    @State private var pinchOverlayPosition: CGPoint = .zero
     @State private var pinchOverlayDismissTask: Task<Void, Never>?
     #endif
     @Environment(\.colorScheme) private var colorScheme
@@ -102,21 +107,6 @@ struct TranslationView: View {
                         .padding(.bottom, 28)
                 }
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-
-            PinchGestureCaptureOverlay { phase, scale, location in
-                handlePinchGesture(phase: phase, scale: scale, location: location)
-            }
-
-            if let pinchOverlayText {
-                Text(pinchOverlayText)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.78), in: Capsule())
-                    .position(pinchOverlayPosition)
-                    .transition(.opacity)
             }
             #endif
         }
@@ -575,6 +565,10 @@ struct TranslationView: View {
                 RoundedRectangle(cornerRadius: editorCornerRadius)
                     .stroke(Color.primary.opacity(0.10), lineWidth: 1)
             )
+            .overlay(alignment: .top) {
+                pinchOverlay(host: .source)
+            }
+            .simultaneousGesture(editorPinchGesture(host: .source))
         #else
         MacSourceTextEditor(text: $viewModel.inputText, fontSize: editorFontPointSize)
             .frame(minHeight: editorMinHeight, maxHeight: .infinity, alignment: .top)
@@ -668,6 +662,10 @@ struct TranslationView: View {
                 RoundedRectangle(cornerRadius: editorCornerRadius)
                     .stroke(Color.primary.opacity(0.10), lineWidth: 1)
             )
+            .overlay(alignment: .top) {
+                pinchOverlay(host: .output)
+            }
+            .simultaneousGesture(editorPinchGesture(host: .output))
             #else
             .background(
                 colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.4),
@@ -979,32 +977,54 @@ struct TranslationView: View {
         )
     }
 
-    private func handlePinchGesture(phase: PinchGestureCaptureOverlay.Phase, scale: CGFloat, location: CGPoint) {
-        switch phase {
-        case .began:
-            pinchBaseFontScaleLevel = currentFontScale.rawValue
-            pinchOverlayDismissTask?.cancel()
-            updatePinchOverlayPosition(location)
-            pinchOverlayText = pinchOverlayLabel
-        case .changed:
-            guard let base = pinchBaseFontScaleLevel else { return }
-            let step = Int((log(max(0.01, scale)) / log(1.15)).rounded())
-            let updated = (base + step).clamped(to: EditorFontScaleLevel.minimumRawValue...EditorFontScaleLevel.maximumRawValue)
-            if editorFontScaleLevel != updated {
-                editorFontScaleLevel = updated
+    @ViewBuilder
+    private func pinchOverlay(host: PinchOverlayHost) -> some View {
+        if let pinchOverlayText, pinchOverlayHost == host {
+            Text(pinchOverlayText)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.78), in: Capsule())
+                .padding(.top, 8)
+                .transition(.opacity)
+        }
+    }
+
+    private func editorPinchGesture(host: PinchOverlayHost) -> some Gesture {
+        MagnificationGesture(minimumScaleDelta: 0.01)
+            .onChanged { scale in
+                if pinchBaseFontScaleLevel == nil {
+                    pinchBaseFontScaleLevel = currentFontScale.rawValue
+                    pinchOverlayHost = host
+                    pinchOverlayDismissTask?.cancel()
+                    pinchOverlayText = pinchOverlayLabel
+                }
+
+                guard let base = pinchBaseFontScaleLevel else { return }
+                let step = Int((log(max(0.01, scale)) / log(1.15)).rounded())
+                let updated = (base + step).clamped(to: EditorFontScaleLevel.minimumRawValue...EditorFontScaleLevel.maximumRawValue)
+                if editorFontScaleLevel != updated {
+                    editorFontScaleLevel = updated
+                }
+                pinchOverlayHost = host
+                pinchOverlayText = pinchOverlayLabel
             }
-            updatePinchOverlayPosition(location)
-            pinchOverlayText = pinchOverlayLabel
-        case .ended:
-            pinchBaseFontScaleLevel = nil
-            pinchOverlayDismissTask?.cancel()
-            pinchOverlayDismissTask = Task {
-                try? await Task.sleep(nanoseconds: 600_000_000)
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        pinchOverlayText = nil
-                    }
+            .onEnded { _ in
+                handlePinchEnded()
+            }
+    }
+
+    private func handlePinchEnded() {
+        pinchBaseFontScaleLevel = nil
+        pinchOverlayDismissTask?.cancel()
+        pinchOverlayDismissTask = Task {
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    pinchOverlayText = nil
+                    pinchOverlayHost = nil
                 }
             }
         }
@@ -1015,13 +1035,6 @@ struct TranslationView: View {
             return "文字サイズ \(currentFontScale.displayName)"
         }
         return "Text Size \(currentFontScale.displayName)"
-    }
-
-    private func updatePinchOverlayPosition(_ location: CGPoint) {
-        pinchOverlayPosition = CGPoint(
-            x: location.x,
-            y: max(24, location.y - 28)
-        )
     }
 
     private func openAppSettings() {
@@ -1133,77 +1146,6 @@ private struct TranslationUnsafeRecoveryTaskHost: View {
             .translationTask(configuration) { session in
                 await unsafeRecoveryController.processPendingRequest(using: session)
             }
-    }
-}
-#endif
-
-#if os(iOS)
-private struct PinchGestureCaptureOverlay: UIViewRepresentable {
-    enum Phase {
-        case began
-        case changed
-        case ended
-    }
-
-    let onChanged: (_ phase: Phase, _ scale: CGFloat, _ location: CGPoint) -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onChanged: onChanged)
-    }
-
-    func makeUIView(context: Context) -> PinchTrackingView {
-        let view = PinchTrackingView()
-        let recognizer = UIPinchGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePinch(_:)))
-        recognizer.cancelsTouchesInView = false
-        recognizer.delegate = context.coordinator
-        view.addGestureRecognizer(recognizer)
-        return view
-    }
-
-    func updateUIView(_ uiView: PinchTrackingView, context: Context) {
-        context.coordinator.onChanged = onChanged
-        uiView.onSingleTouch = { _ in }
-    }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var onChanged: (_ phase: Phase, _ scale: CGFloat, _ location: CGPoint) -> Void
-
-        init(onChanged: @escaping (_ phase: Phase, _ scale: CGFloat, _ location: CGPoint) -> Void) {
-            self.onChanged = onChanged
-        }
-
-        @objc func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
-            let location = recognizer.location(in: recognizer.view)
-            switch recognizer.state {
-            case .began:
-                onChanged(.began, recognizer.scale, location)
-            case .changed:
-                onChanged(.changed, recognizer.scale, location)
-            case .ended, .cancelled, .failed:
-                onChanged(.ended, recognizer.scale, location)
-            default:
-                break
-            }
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            true
-        }
-    }
-}
-
-private final class PinchTrackingView: UIView {
-    var onSingleTouch: ((CGPoint) -> Void)?
-
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        guard let touches = event?.allTouches else { return false }
-        if touches.count >= 2 {
-            return true
-        }
-        if touches.count == 1 {
-            onSingleTouch?(point)
-        }
-        return false
     }
 }
 #endif

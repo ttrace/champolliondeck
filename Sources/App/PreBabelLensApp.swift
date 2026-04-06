@@ -75,6 +75,7 @@ struct PreBabelLens: App {
             .commands {
                 CommandGroup(replacing: .newItem) { }
                 TranslationMenuCommands(viewModel: viewModel)
+                TextSizeViewMenuCommands()
             }
         #else
         mainScene
@@ -152,7 +153,6 @@ struct PreBabelLens: App {
 #if os(macOS)
 private struct TranslationMenuCommands: Commands {
     @ObservedObject var viewModel: TranslationViewModel
-    @AppStorage("editorFontScaleLevel") private var editorFontScaleLevel: Int = 2
 
     var body: some Commands {
         CommandMenu(topMenuTitle) {
@@ -167,23 +167,6 @@ private struct TranslationMenuCommands: Commands {
             }
             .keyboardShortcut(".", modifiers: [.command])
             .disabled(!viewModel.isTranslating)
-
-            Divider()
-
-            Button(increaseTextSizeTitle) {
-                editorFontScaleLevel = min(4, editorFontScaleLevel + 1)
-            }
-            .keyboardShortcut("=", modifiers: [.command])
-
-            Button(decreaseTextSizeTitle) {
-                editorFontScaleLevel = max(0, editorFontScaleLevel - 1)
-            }
-            .keyboardShortcut("-", modifiers: [.command])
-
-            Button(resetTextSizeTitle) {
-                editorFontScaleLevel = 2
-            }
-            .keyboardShortcut("0", modifiers: [.command])
 
             Divider()
 
@@ -250,24 +233,59 @@ private struct TranslationMenuCommands: Commands {
         isJapaneseLocale ? "AI翻訳はこのデバイスで利用できません" : "AI translation unavailable on this device"
     }
 
-    private var increaseTextSizeTitle: String {
-        isJapaneseLocale ? "文字サイズを大きく" : "Increase Text Size"
-    }
-
-    private var decreaseTextSizeTitle: String {
-        isJapaneseLocale ? "文字サイズを小さく" : "Decrease Text Size"
-    }
-
-    private var resetTextSizeTitle: String {
-        isJapaneseLocale ? "文字サイズを標準に戻す" : "Reset Text Size"
-    }
-
     private var isJapaneseLocale: Bool {
         Locale.preferredLanguages.first?.hasPrefix("ja") == true
     }
 
     private var currentLabelStyle: TargetLanguageOption.LabelStyle {
         viewModel.usesAppleIntelligenceTranslation ? .ai : .machine
+    }
+}
+
+private struct TextSizeViewMenuCommands: Commands {
+    @AppStorage("editorFontScaleLevel") private var editorFontScaleLevel: Int = 2
+
+    var body: some Commands {
+        CommandGroup(after: .windowSize) {
+            Divider()
+
+            Button {
+                editorFontScaleLevel = 2
+            } label: {
+                Label(resetTextSizeTitle, systemImage: "textformat.size")
+            }
+            .keyboardShortcut("0", modifiers: [.command])
+
+            Button {
+                editorFontScaleLevel = min(4, editorFontScaleLevel + 1)
+            } label: {
+                Label(increaseTextSizeTitle, systemImage: "plus.magnifyingglass")
+            }
+            .keyboardShortcut("=", modifiers: [.command])
+
+            Button {
+                editorFontScaleLevel = max(0, editorFontScaleLevel - 1)
+            } label: {
+                Label(decreaseTextSizeTitle, systemImage: "minus.magnifyingglass")
+            }
+            .keyboardShortcut("-", modifiers: [.command])
+        }
+    }
+
+    private var increaseTextSizeTitle: String {
+        isJapaneseLocale ? "拡大" : "Zoom In"
+    }
+
+    private var decreaseTextSizeTitle: String {
+        isJapaneseLocale ? "縮小" : "Zoom Out"
+    }
+
+    private var resetTextSizeTitle: String {
+        isJapaneseLocale ? "標準文字サイズ" : "Actual Size"
+    }
+
+    private var isJapaneseLocale: Bool {
+        Locale.preferredLanguages.first?.hasPrefix("ja") == true
     }
 }
 

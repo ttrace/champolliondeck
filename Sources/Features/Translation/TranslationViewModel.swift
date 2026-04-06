@@ -2,6 +2,10 @@ import Foundation
 
 @MainActor
 final class TranslationViewModel: ObservableObject {
+    private enum AppStateKey {
+        static let targetLanguage = "appState.targetLanguage"
+    }
+
     enum StatusNoticeKind: Equatable {
         case sameLanguageUntranslatable
         case aiFallbackToMachineTranslation
@@ -36,7 +40,11 @@ final class TranslationViewModel: ObservableObject {
         case completed
     }
 
-    @Published var targetLanguage: String
+    @Published var targetLanguage: String {
+        didSet {
+            persistTargetLanguageSelection()
+        }
+    }
     @Published var experimentMode: TranslationExperimentMode = .segmented
     @Published var inputText: String = ""
     @Published var glossaryText: String = ""
@@ -63,6 +71,7 @@ final class TranslationViewModel: ObservableObject {
 
     private let orchestrator: TranslationOrchestrator
     private let iOSEnginePolicy: IOSAdaptiveTranslationEnginePolicy?
+    private let userDefaults: UserDefaults
     private var shouldTranslateOnLaunch: Bool = false
     private var shouldActivateAppOnLaunch: Bool = false
     private var partialTranslationsBySegment: [Int: String] = [:]
@@ -81,11 +90,19 @@ final class TranslationViewModel: ObservableObject {
     init(
         orchestrator: TranslationOrchestrator,
         iOSEnginePolicy: IOSAdaptiveTranslationEnginePolicy? = nil,
-        launchInputText: String? = nil
+        launchInputText: String? = nil,
+        userDefaults: UserDefaults = .standard
     ) {
+        self.userDefaults = userDefaults
         self.iOSEnginePolicy = iOSEnginePolicy
         let initialOptions = AppleIntelligenceLanguageCatalog.translationFrameworkLanguageOptions()
-        if initialOptions.contains(where: { $0.code == "ja" }) {
+        let persistedTargetLanguage = userDefaults.string(forKey: AppStateKey.targetLanguage)
+        if
+            let persistedTargetLanguage,
+            initialOptions.contains(where: { $0.code == persistedTargetLanguage })
+        {
+            self.targetLanguage = persistedTargetLanguage
+        } else if initialOptions.contains(where: { $0.code == "ja" }) {
             self.targetLanguage = "ja"
         } else {
             self.targetLanguage = initialOptions.first?.code ?? "en"
@@ -209,6 +226,7 @@ final class TranslationViewModel: ObservableObject {
     private func normalizeTargetLanguageSelection() {
         guard !targetLanguageOptions.isEmpty else { return }
         if targetLanguageOptions.contains(where: { $0.code == targetLanguage }) {
+            persistTargetLanguageSelection()
             return
         }
         if let japanese = targetLanguageOptions.first(where: { $0.code == "ja" }) {
@@ -216,6 +234,11 @@ final class TranslationViewModel: ObservableObject {
             return
         }
         targetLanguage = targetLanguageOptions[0].code
+    }
+
+    private func persistTargetLanguageSelection() {
+        guard !targetLanguage.isEmpty else { return }
+        userDefaults.set(targetLanguage, forKey: AppStateKey.targetLanguage)
     }
 
     private func runManagedTranslation() async {

@@ -673,6 +673,7 @@ private enum FoundationModelsRuntimeTranslator {
             using: session,
             segmentIndex: segmentIndex,
             onPartialResult: shouldStreamPartial ? onPartialResult : nil,
+            onDiagnosticEvent: onDiagnosticEvent,
             stallTimeoutMs: stallTimeoutMs,
             sourceWordCount: sourceWordCount
         )
@@ -696,6 +697,7 @@ private enum FoundationModelsRuntimeTranslator {
         using session: LanguageModelSession,
         segmentIndex: Int,
         onPartialResult: (@Sendable (_ segmentIndex: Int, _ partialTranslation: String) -> Void)?,
+        onDiagnosticEvent: (@Sendable (_ message: String) -> Void)?,
         stallTimeoutMs: Double,
         sourceWordCount: Int
     ) async throws -> StructuredTranslationPayload {
@@ -724,6 +726,7 @@ private enum FoundationModelsRuntimeTranslator {
         var observedChunkCount = 0
         var recentChunkSignatures: [String] = []
         var lastNormalizedPartialForDelta: String?
+        var latestRawJSONForLog: String?
         var consecutiveNonWordExplosionChunks = 0
         var consecutiveNonWordExplosionChars = 0
         var consecutiveMonoCharExplosionChunks = 0
@@ -732,8 +735,16 @@ private enum FoundationModelsRuntimeTranslator {
         do {
             for try await snapshot in stream {
                 latestSnapshot = snapshot
+                latestRawJSONForLog = snapshot.rawContent.jsonString
                 await progress.bump()
                 observedChunkCount += 1
+
+                if verboseLoggingEnabled {
+                    let rawForLog = sanitizedForLog(snapshot.rawContent.jsonString) ?? "(empty)"
+                    onDiagnosticEvent?(
+                        "verbose model-output-raw segment=\(segmentIndex), chunk=\(observedChunkCount), raw=\(rawForLog)"
+                    )
+                }
 
                 guard let partialTranslation = extractPartialTranslation(
                     fromRawJSON: snapshot.rawContent.jsonString
@@ -746,6 +757,12 @@ private enum FoundationModelsRuntimeTranslator {
                 if observedChunkCount >= repetitionGuardMinChunkCount,
                    outputWordCount > max(1, sourceWordCount) * repetitionGuardOutputWordMultiplier
                 {
+                    if verboseLoggingEnabled {
+                        let rawForLog = sanitizedForLog(latestRawJSONForLog) ?? "(empty)"
+                        onDiagnosticEvent?(
+                            "verbose unsafe-trigger segment=\(segmentIndex), reason=word-count-multiplier, latestRaw=\(rawForLog)"
+                        )
+                    }
                     throw FoundationModelsRuntimeError.suspectedStreamRepetition(
                         sourceWords: sourceWordCount,
                         outputWords: outputWordCount,
@@ -768,6 +785,12 @@ private enum FoundationModelsRuntimeTranslator {
                 if consecutiveNonWordExplosionChunks >= nonWordExplosionLookbackChunks,
                    consecutiveNonWordExplosionChars >= nonWordExplosionMinAddedChars
                 {
+                    if verboseLoggingEnabled {
+                        let rawForLog = sanitizedForLog(latestRawJSONForLog) ?? "(empty)"
+                        onDiagnosticEvent?(
+                            "verbose unsafe-trigger segment=\(segmentIndex), reason=nonword-explosion-\(nonWordExplosionLookbackChunks), latestRaw=\(rawForLog)"
+                        )
+                    }
                     throw FoundationModelsRuntimeError.suspectedStreamRepetition(
                         sourceWords: sourceWordCount,
                         outputWords: outputWordCount,
@@ -785,6 +808,12 @@ private enum FoundationModelsRuntimeTranslator {
                 if consecutiveMonoCharExplosionChunks >= monoCharExplosionLookbackChunks,
                    consecutiveMonoCharExplosionChars >= monoCharExplosionMinAddedChars
                 {
+                    if verboseLoggingEnabled {
+                        let rawForLog = sanitizedForLog(latestRawJSONForLog) ?? "(empty)"
+                        onDiagnosticEvent?(
+                            "verbose unsafe-trigger segment=\(segmentIndex), reason=monochar-explosion-\(monoCharExplosionLookbackChunks), latestRaw=\(rawForLog)"
+                        )
+                    }
                     throw FoundationModelsRuntimeError.suspectedStreamRepetition(
                         sourceWords: sourceWordCount,
                         outputWords: outputWordCount,
@@ -797,6 +826,12 @@ private enum FoundationModelsRuntimeTranslator {
                     chunkSignature,
                     recentChunkSignatures: recentChunkSignatures
                 ) {
+                    if verboseLoggingEnabled {
+                        let rawForLog = sanitizedForLog(latestRawJSONForLog) ?? "(empty)"
+                        onDiagnosticEvent?(
+                            "verbose unsafe-trigger segment=\(segmentIndex), reason=semantic-lookback-\(semanticRepetitionLookbackChunks), latestRaw=\(rawForLog)"
+                        )
+                    }
                     throw FoundationModelsRuntimeError.suspectedStreamRepetition(
                         sourceWords: sourceWordCount,
                         outputWords: outputWordCount,
@@ -817,6 +852,12 @@ private enum FoundationModelsRuntimeTranslator {
             }
         } catch is CancellationError {
             if await progress.didTimeout {
+                if verboseLoggingEnabled {
+                    let rawForLog = sanitizedForLog(latestRawJSONForLog) ?? "(empty)"
+                    onDiagnosticEvent?(
+                        "verbose unsafe-trigger segment=\(segmentIndex), reason=segment-timeout-\(String(format: "%.2f", stallTimeoutMs))ms, latestRaw=\(rawForLog)"
+                    )
+                }
                 throw FoundationModelsRuntimeError.segmentProcessingTimeout(
                     timeoutMs: stallTimeoutMs
                 )
