@@ -1587,6 +1587,8 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
         textView.smartQuotesType = .no
         textView.dataDetectorTypes = []
         textView.textContainerInset = UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
+        context.coordinator.attachTextView(textView)
+        textView.inputAccessoryView = context.coordinator.makeKeyboardAccessoryToolbar()
         return textView
     }
 
@@ -1603,10 +1605,30 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         @Binding private var text: String
         private let onCursorLocationChanged: (Int) -> Void
+        private weak var textView: UITextView?
 
         init(text: Binding<String>, onCursorLocationChanged: @escaping (Int) -> Void) {
             _text = text
             self.onCursorLocationChanged = onCursorLocationChanged
+        }
+
+        func attachTextView(_ textView: UITextView) {
+            self.textView = textView
+        }
+
+        func makeKeyboardAccessoryToolbar() -> UIToolbar {
+            let toolbar = UIToolbar()
+            toolbar.sizeToFit()
+
+            let retranslate = UIBarButtonItem(title: "再翻訳", style: .plain, target: nil, action: nil)
+            retranslate.isEnabled = false
+            let proofread = UIBarButtonItem(title: "AI校正", style: .plain, target: nil, action: nil)
+            proofread.isEnabled = false
+            let spacer = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
+            let done = UIBarButtonItem(title: "OK", style: .done, target: self, action: #selector(doneTapped))
+
+            toolbar.items = [retranslate, proofread, spacer, done]
+            return toolbar
         }
 
         func textViewDidChange(_ textView: UITextView) {
@@ -1616,6 +1638,10 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
 
         func textViewDidChangeSelection(_ textView: UITextView) {
             onCursorLocationChanged(textView.selectedRange.location)
+        }
+
+        @objc private func doneTapped() {
+            textView?.resignFirstResponder()
         }
     }
 }
