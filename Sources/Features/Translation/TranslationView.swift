@@ -1002,23 +1002,15 @@ struct TranslationView: View {
         clutchOutputScrollFinalizeTask?.cancel()
         clutchOutputScrollFinalizeTask = Task {
             #if os(iOS)
-            // iOS can relayout multiple times after clutch selection (keyboard/field resize),
-            // so keep re-aligning at short intervals until the scroll settles.
-            let retries = 7
-            for attempt in 0..<retries {
-                if attempt == 0 {
-                    await Task.yield()
-                } else {
-                    try? await Task.sleep(nanoseconds: 160_000_000)
-                }
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    guard clutchSelectedSegmentIndex == segmentIndex else { return }
-                    var transaction = Transaction()
-                    transaction.disablesAnimations = true
-                    withTransaction(transaction) {
-                        proxy.scrollTo(outputSegmentID(for: segmentIndex), anchor: anchor)
-                    }
+            // Keep one delayed alignment pass to avoid visible jitter.
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard clutchSelectedSegmentIndex == segmentIndex else { return }
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    proxy.scrollTo(outputSegmentID(for: segmentIndex), anchor: anchor)
                 }
             }
             #else
@@ -1816,25 +1808,8 @@ private extension UITextView {
             animated: false
         )
 
-        // Recompute with latest layout/insets. This is more reliable than a single
-        // animated jump for long distances on iPhone.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
-            self?.applyClutchScrollOffset(
-                for: range,
-                topAlignIfNeeded: topAlignIfNeeded,
-                force: true,
-                animated: false
-            )
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) { [weak self] in
-            self?.applyClutchScrollOffset(
-                for: range,
-                topAlignIfNeeded: topAlignIfNeeded,
-                force: true,
-                animated: false
-            )
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.58) { [weak self] in
+        // Keep only one trailing correction pass to minimize shake.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { [weak self] in
             self?.applyClutchScrollOffset(
                 for: range,
                 topAlignIfNeeded: topAlignIfNeeded,
