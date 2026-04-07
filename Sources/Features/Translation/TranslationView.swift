@@ -816,9 +816,22 @@ struct TranslationView: View {
                         .background(clutchOutputHighlightBackground(for: segment.segmentIndex), in: RoundedRectangle(cornerRadius: 6))
                         .id(outputSegmentID(for: segment.segmentIndex))
                         .contentShape(Rectangle())
-                        .highPriorityGesture(TapGesture().onEnded {
-                            handleOutputSegmentTap(segment.segmentIndex)
-                        })
+                        .overlay {
+                            #if os(macOS)
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    handleOutputSegmentTap(segment.segmentIndex)
+                                }
+                                .allowsHitTesting(clutchModeEnabled)
+                            #else
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    handleOutputSegmentTap(segment.segmentIndex)
+                                }
+                            #endif
+                        }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
