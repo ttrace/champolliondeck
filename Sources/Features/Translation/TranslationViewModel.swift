@@ -57,6 +57,8 @@ final class TranslationViewModel: ObservableObject {
     @Published var translatedText: String = ""
     @Published var segmentOutputs: [SegmentOutput] = []
     @Published var segmentJoinersAfter: [String] = []
+    @Published var sourceSegments: [TextSegment] = []
+    @Published var sourceTextSnapshotForSegments: String = ""
     @Published var traces: [PreprocessTrace] = []
     @Published var protectedTokens: [ProtectedToken] = []
     @Published var glossaryMatches: [GlossaryMatch] = []
@@ -290,6 +292,8 @@ final class TranslationViewModel: ObservableObject {
             translatedText = ""
             segmentOutputs = []
             segmentJoinersAfter = []
+            sourceSegments = []
+            sourceTextSnapshotForSegments = ""
             traces = []
             protectedTokens = []
             glossaryMatches = []
@@ -317,6 +321,8 @@ final class TranslationViewModel: ObservableObject {
         translatedText = ""
         segmentOutputs = []
         segmentJoinersAfter = []
+        sourceSegments = []
+        sourceTextSnapshotForSegments = ""
         traces = []
         protectedTokens = []
         glossaryMatches = []
@@ -373,6 +379,8 @@ final class TranslationViewModel: ObservableObject {
             translatedText = output.translatedText
             segmentOutputs = output.segmentOutputs
             segmentJoinersAfter = output.analysis.input.segmentJoinersAfter
+            sourceSegments = output.analysis.input.segments
+            sourceTextSnapshotForSegments = output.analysis.input.originalText
             traces = output.analysis.traces
             protectedTokens = output.analysis.input.protectedTokens
             glossaryMatches = output.analysis.input.glossaryMatches
