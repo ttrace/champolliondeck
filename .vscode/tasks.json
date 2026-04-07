@@ -1,0 +1,49 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "swift: Build Debug PreBabelLens",
+            "type": "shell",
+            "command": "swift",
+            "args": [
+                "build",
+                "-c",
+                "debug",
+                "--product",
+                "PreBabelLens"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "swift: Build Release PreBabelLens",
+            "type": "shell",
+            "command": "swift",
+            "args": [
+                "build",
+                "-c",
+                "release",
+                "--product",
+                "PreBabelLens"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "appbundle: Build Debug PreBabelLens",
+            "type": "shell",
+            "command": "./scripts/launch_app_bundle.sh",
+            "args": [
+                "--no-open"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

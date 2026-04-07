@@ -2,6 +2,7 @@
 set -euo pipefail
 
 APP_NAME="PreBabelLens"
+SHOULD_OPEN_APP=1
 EXECUTABLE_PATH=".build/arm64-apple-macosx/debug/${APP_NAME}"
 BUNDLE_DIR=".build/AppBundle/${APP_NAME}.app"
 MACOS_DIR="${BUNDLE_DIR}/Contents/MacOS"
@@ -11,6 +12,10 @@ LOCALIZATION_SOURCE_DIR="Localizations"
 ICON_FILE_SOURCE="Assets/AppIcon.icns"
 ICON_FILE_NAME="AppIcon.icns"
 XCODE_DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+
+if [[ "${1:-}" == "--no-open" ]]; then
+  SHOULD_OPEN_APP=0
+fi
 
 if [[ -d "${XCODE_DEVELOPER_DIR}" ]]; then
   echo "Building with Xcode toolchain..."
@@ -88,4 +93,6 @@ if [[ -f "${ICON_FILE_SOURCE}" ]]; then
 fi
 
 echo "Created app bundle: ${BUNDLE_DIR}"
-open "${BUNDLE_DIR}"
+if [[ "${SHOULD_OPEN_APP}" == "1" ]]; then
+  open "${BUNDLE_DIR}"
+fi

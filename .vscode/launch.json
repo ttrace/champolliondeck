@@ -1,24 +1,34 @@
 {
+    "version": "0.2.0",
     "configurations": [
         {
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder:champollion-deck}",
-            "name": "Debug ChampollionDeckApp",
-            "target": "ChampollionDeckApp",
+            "cwd": "${workspaceFolder}",
+            "name": "PreBabelLens (Debug)",
+            "target": "PreBabelLens",
             "configuration": "debug",
-            "preLaunchTask": "swift: Build Debug ChampollionDeckApp"
+            "preLaunchTask": "swift: Build Debug PreBabelLens"
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
-            "cwd": "${workspaceFolder:champollion-deck}",
-            "name": "Release ChampollionDeckApp",
-            "target": "ChampollionDeckApp",
+            "cwd": "${workspaceFolder}",
+            "name": "PreBabelLens (Release)",
+            "target": "PreBabelLens",
             "configuration": "release",
-            "preLaunchTask": "swift: Build Release ChampollionDeckApp"
+            "preLaunchTask": "swift: Build Release PreBabelLens"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "PreBabelLens.app (LLDB, Recommended)",
+            "program": "${workspaceFolder}/.build/AppBundle/PreBabelLens.app/Contents/MacOS/PreBabelLens",
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "appbundle: Build Debug PreBabelLens",
+            "console": "integratedTerminal"
         },
         {
             "type": "swift",
