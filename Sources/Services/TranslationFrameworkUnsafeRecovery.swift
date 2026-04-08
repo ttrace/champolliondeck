@@ -55,7 +55,9 @@ final class TranslationFrameworkUnsafeRecoveryController: ObservableObject, Unsa
     private var pendingRequest: PendingRequest?
     private var pendingContinuation: CheckedContinuation<String?, Never>?
     private var lastSuccessfulSourceLanguageCode: String?
+    private var pendingRequestWatchdogTask: Task<Void, Never>?
     private static let translationCallTimeoutNanoseconds: UInt64 = 25_000_000_000
+    private static let pendingRequestWatchdogNanoseconds: UInt64 = 45_000_000_000
 
     private func log(_ message: String) {
     #if canImport(Logging)
@@ -72,17 +74,21 @@ final class TranslationFrameworkUnsafeRecoveryController: ObservableObject, Unsa
         targetLanguage: String,
         onDiagnosticEvent: (@Sendable (_ message: String) -> Void)?
     ) async -> String? {
-        guard pendingRequest == nil else {
-            onDiagnosticEvent?("translation-framework-recovery: skipped-because-request-is-already-active")
-            return nil
+        if let currentPendingRequest = pendingRequest {
+            onDiagnosticEvent?(
+                "translation-framework-recovery: skipped-because-request-is-already-active id=\(currentPendingRequest.id.uuidString)"
+            )
+            log("stale-request-reset-triggered id=\(currentPendingRequest.id.uuidString)")
+            finishPendingRequest(with: nil)
         }
 
+        let requestID = UUID()
         let (resolvedSourceLanguageCode, resolutionReason) = resolveSourceLanguageCode(
             requestedSourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage
         )
         pendingRequest = PendingRequest(
-            id: UUID(),
+            id: requestID,
             sourceText: sourceText,
             sourceLanguage: sourceLanguage,
             resolvedSourceLanguageCode: resolvedSourceLanguageCode,
@@ -100,6 +106,17 @@ final class TranslationFrameworkUnsafeRecoveryController: ObservableObject, Unsa
         configuration.invalidate()
         requestGeneration = UUID()
         self.configuration = configuration
+        pendingRequestWatchdogTask?.cancel()
+        pendingRequestWatchdogTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.pendingRequestWatchdogNanoseconds)
+            guard let self else { return }
+            guard let pendingRequest, pendingRequest.id == requestID else { return }
+            pendingRequest.onDiagnosticEvent?(
+                "translation-framework-recovery: watchdog-timeout id=\(requestID.uuidString)"
+            )
+            self.log("watchdog-timeout id=\(requestID.uuidString)")
+            self.finishPendingRequest(with: nil)
+        }
 
         return await withCheckedContinuation { continuation in
             pendingContinuation = continuation
@@ -245,6 +262,8 @@ final class TranslationFrameworkUnsafeRecoveryController: ObservableObject, Unsa
     }
 
     private func finishPendingRequest(with translatedText: String?) {
+        pendingRequestWatchdogTask?.cancel()
+        pendingRequestWatchdogTask = nil
         configuration = nil
         pendingRequest = nil
         pendingContinuation?.resume(returning: translatedText)
