@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0 (Unreleased)
+
+0.7.0 からの主なユーザー向け変更点:
+
+- Clutch モードを iOS / macOS で強化
+  - Source/Output 双方向で対応セグメントをハイライト
+  - 画面外の対応セグメントへ自動スクロールし、ジッターを軽減
+- コンパクト縦積みレイアウトの読書モード挙動を改善
+  - スクロール遷移時の安定性を向上
+  - コンパクト操作中の Source/Output 可読性を改善
+- Translation Framework 回復経路の安定性を向上
+  - timeout/retry ガードを追加
+  - stale pending リクエスト回復を追加し、停止状態を軽減
+- iOS Share Panel の文書取り込みを改善
+  - `.pdf` / `.docx` からのテキスト抽出に対応
+  - PDF 取り込み時にソフト改行正規化を適用
+
 ## 0.6.3 (Unreleased)
 
 0.5.0 からの主なユーザー向け変更点:
