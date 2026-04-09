@@ -176,6 +176,25 @@ Prefer tests for:
   - URL scheme handoff (`prebabellens://import-shared`)
   - shared pasteboard fallback
 
+## Clutch and Scroll-Resize Policy
+Clutch interaction requirements:
+- In Clutch mode, tapping/cursoring in one field highlights the corresponding segment in the other field.
+- When the highlighted target segment is out of view, auto-scroll should bring it into view with platform-consistent touch-and-feel.
+- Keep Source and Output behavior symmetric where possible, while allowing platform-specific implementation details.
+
+Compact stacked layout resize requirements (current direction):
+- Prefer scroll-driven field resizing over grabber-driven mode switching.
+- Reader mode transition should be two-stage:
+  1. First downward gesture from compact reader state restores default field heights.
+  2. Next gesture performs normal content scrolling.
+- After default heights are restored, Source/Output scroll must behave normally in both directions.
+
+Implementation principles for this area:
+- Avoid ad-hoc “observe and snap back” patterns whenever possible.
+- Prefer structural state transitions that prevent invalid movement up front (for example, explicit mode/lock state gates) over reactive correction.
+- Keep gesture ownership clear and minimal to avoid competing recognizers and jitter.
+- Keep layout changes decoupled from text-selection/clutch updates to reduce interaction side effects.
+
 ## Release Policy
 - Official release artifacts must be built on local macOS using the project owner's Xcode toolchain.
 - Official release artifacts must be signed with local Developer ID credentials, notarized, and stapled locally.
