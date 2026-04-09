@@ -12,5 +12,5 @@
 "view.menu.size.zoom_out" = "縮小";
 "tf.menu.download_hint" = "言語パックをダウンロードします";
 "tf.menu.unsupported_pair_format" = "%@ から %@ には翻訳できません";
-"tf.menu.source_language_fallback" = "入力言語";
+"tf.menu.source_language_fallback" = "不明な言語";
 "tf.menu.target_language_fallback" = "翻訳先言語";
