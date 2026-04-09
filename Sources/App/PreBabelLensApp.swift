@@ -122,7 +122,27 @@ struct PreBabelLens: App {
     }
 
     private static func launchInputText() -> String? {
-        let args = Array(ProcessInfo.processInfo.arguments.dropFirst())
+        let rawArgs = Array(ProcessInfo.processInfo.arguments.dropFirst())
+        let ignoredArgsRequiringValue: Set<String> = [
+            "-AppleLanguages",
+            "-AppleLocale"
+        ]
+
+        var args: [String] = []
+        var index = 0
+        while index < rawArgs.count {
+            let current = rawArgs[index]
+            if ignoredArgsRequiringValue.contains(current) {
+                index += 1
+                if index < rawArgs.count {
+                    index += 1
+                }
+                continue
+            }
+            args.append(current)
+            index += 1
+        }
+
         guard !args.isEmpty else { return nil }
 
         let combined = args.joined(separator: " ")
@@ -206,53 +226,65 @@ private struct TranslationMenuCommands: Commands {
     }
 
     private var topMenuTitle: String {
-        isJapaneseLocale ? "翻訳" : "Translate"
+        localized("menu.translate.top", defaultValue: "Translate")
     }
 
     private var translateTitle: String {
-        isJapaneseLocale ? "翻訳" : "Translate"
+        localized("menu.translate.action.translate", defaultValue: "Translate")
     }
 
     private var stopTitle: String {
-        isJapaneseLocale ? "中断" : "Stop"
+        localized("menu.translate.action.stop", defaultValue: "Stop")
     }
 
     private var targetLanguageMenuTitle: String {
-        isJapaneseLocale ? "翻訳先言語" : "Target Language"
+        localized("menu.translate.target_language", defaultValue: "Target Language")
     }
 
     private var switchToAITitle: String {
-        isJapaneseLocale ? "AI翻訳に切り替え" : "Switch to AI Translation"
+        localized("menu.translate.switch_to_ai", defaultValue: "Switch to AI Translation")
     }
 
     private var switchToStandardTitle: String {
-        isJapaneseLocale ? "機械翻訳に切り替え" : "Switch to Standard Translation"
+        localized("menu.translate.switch_to_standard", defaultValue: "Switch to Standard Translation")
     }
 
     private var aiUnavailableTitle: String {
-        isJapaneseLocale ? "AI翻訳はこのデバイスで利用できません" : "AI translation unavailable on this device"
-    }
-
-    private var isJapaneseLocale: Bool {
-        Locale.preferredLanguages.first?.hasPrefix("ja") == true
+        localized(
+            "menu.translate.ai_unavailable",
+            defaultValue: "AI translation unavailable on this device"
+        )
     }
 
     private var currentLabelStyle: TargetLanguageOption.LabelStyle {
         viewModel.usesAppleIntelligenceTranslation ? .ai : .machine
     }
+
+    private func localized(_ key: String, defaultValue: String) -> String {
+        NSLocalizedString(key, bundle: .module, value: defaultValue, comment: "")
+    }
 }
 
 private struct TextSizeViewMenuCommands: Commands {
     @AppStorage("editorFontScaleLevel") private var editorFontScaleLevel: Int = 2
+    private let compactWindowMinWidth: CGFloat = 362
+    private let columnLayoutThresholdWidth: CGFloat = 1133
 
     var body: some Commands {
-        CommandGroup(after: .windowSize) {
+        CommandGroup(after: .toolbar) {
+            Button {
+                toggleCompactColumnWindowWidth()
+            } label: {
+                Text(compactColumnToggleTitle)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+
             Divider()
 
             Button {
                 editorFontScaleLevel = 2
             } label: {
-                Label(resetTextSizeTitle, systemImage: "textformat.size")
+                Label(resetTextSizeTitle, systemImage: "magnifyingglass")
             }
             .keyboardShortcut("0", modifiers: [.command])
 
@@ -269,23 +301,54 @@ private struct TextSizeViewMenuCommands: Commands {
                 Label(decreaseTextSizeTitle, systemImage: "minus.magnifyingglass")
             }
             .keyboardShortcut("-", modifiers: [.command])
+
+            Divider()
         }
     }
 
     private var increaseTextSizeTitle: String {
-        isJapaneseLocale ? "拡大" : "Zoom In"
+        localized("view.menu.size.zoom_in", defaultValue: "Zoom In")
     }
 
     private var decreaseTextSizeTitle: String {
-        isJapaneseLocale ? "縮小" : "Zoom Out"
+        localized("view.menu.size.zoom_out", defaultValue: "Zoom Out")
     }
 
     private var resetTextSizeTitle: String {
-        isJapaneseLocale ? "標準文字サイズ" : "Actual Size"
+        localized("view.menu.size.actual", defaultValue: "Actual Size")
     }
 
-    private var isJapaneseLocale: Bool {
-        Locale.preferredLanguages.first?.hasPrefix("ja") == true
+    private var compactColumnToggleTitle: String {
+        if isCompactWindowLayoutActive {
+            return localized("view.menu.column", defaultValue: "Column Layout")
+        }
+        return localized("view.menu.compact", defaultValue: "Compact")
+    }
+
+    private var isCompactWindowLayoutActive: Bool {
+        guard let window = activeWindow else { return false }
+        return window.contentLayoutRect.width < columnLayoutThresholdWidth
+    }
+
+    private var activeWindow: NSWindow? {
+        NSApp.keyWindow
+            ?? NSApp.mainWindow
+            ?? NSApp.windows.first(where: { $0.isVisible })
+            ?? NSApp.windows.first
+    }
+
+    private func toggleCompactColumnWindowWidth() {
+        guard let window = activeWindow else { return }
+        let targetWidth = isCompactWindowLayoutActive ? columnLayoutThresholdWidth : compactWindowMinWidth
+        let targetSize = NSSize(
+            width: targetWidth,
+            height: max(window.contentLayoutRect.height, 680)
+        )
+        window.setContentSize(targetSize)
+    }
+
+    private func localized(_ key: String, defaultValue: String) -> String {
+        NSLocalizedString(key, bundle: .module, value: defaultValue, comment: "")
     }
 }
 

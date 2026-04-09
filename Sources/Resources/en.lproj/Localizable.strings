@@ -1,0 +1,12 @@
+"menu.translate.top" = "Translate";
+"menu.translate.action.translate" = "Translate";
+"menu.translate.action.stop" = "Stop";
+"menu.translate.target_language" = "Target Language";
+"menu.translate.switch_to_ai" = "Switch to AI Translation";
+"menu.translate.switch_to_standard" = "Switch to Standard Translation";
+"menu.translate.ai_unavailable" = "AI translation unavailable on this device";
+"view.menu.compact" = "Compact";
+"view.menu.column" = "Column Layout";
+"view.menu.size.actual" = "Actual Size";
+"view.menu.size.zoom_in" = "Zoom In";
+"view.menu.size.zoom_out" = "Zoom Out";
