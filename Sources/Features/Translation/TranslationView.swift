@@ -830,51 +830,56 @@ struct TranslationView: View {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(viewModel.segmentOutputs.enumerated()), id: \.element.id) { index, segment in
-                    Text(outputAttributedText(for: segment, joiner: joinerAfterOutputSegment(at: index)))
-                        .font(.system(size: editorFontPointSize))
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 1)
-                        .padding(.horizontal, 4)
-                        .background(clutchOutputHighlightBackground(for: segment.segmentIndex), in: RoundedRectangle(cornerRadius: 6))
-                        .id(outputSegmentID(for: segment.segmentIndex))
-                        .contentShape(Rectangle())
-                        .overlay {
-                            #if os(macOS)
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    handleOutputSegmentTap(segment.segmentIndex)
-                                }
-                                .allowsHitTesting(clutchModeEnabled)
-                            #else
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    handleOutputSegmentTap(segment.segmentIndex)
-                                }
-                            #endif
-                        }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(outputAttributedText)
+                .font(.system(size: editorFontPointSize))
+                .textSelection(.enabled)
+                .environment(\.openURL, OpenURLAction { url in
+                    handleOutputOpenURL(url)
+                })
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private func outputAttributedText(for segment: SegmentOutput, joiner: String) -> AttributedString {
-        var chunk = AttributedString(segment.translatedText + joiner)
-        if segment.isUnsafeFallback {
-            if segment.isUnsafeRecoveredByTranslationFramework {
-                chunk.backgroundColor = unsafeRecoveredSegmentBackgroundColor
-                chunk.foregroundColor = unsafeRecoveredSegmentForegroundColor
-            } else {
-                chunk.backgroundColor = unsafeSegmentBackgroundColor
-                chunk.foregroundColor = unsafeSegmentForegroundColor
+    private var outputAttributedText: AttributedString {
+        let defaultOutputTextColor: Color = colorScheme == .dark ? .white : .primary
+        var combined = AttributedString()
+        for index in viewModel.segmentOutputs.indices {
+            let segment = viewModel.segmentOutputs[index]
+            var chunk = AttributedString(segment.translatedText + joinerAfterOutputSegment(at: index))
+            chunk.foregroundColor = defaultOutputTextColor
+            if segment.isUnsafeFallback {
+                if segment.isUnsafeRecoveredByTranslationFramework {
+                    chunk.backgroundColor = unsafeRecoveredSegmentBackgroundColor
+                    chunk.foregroundColor = unsafeRecoveredSegmentForegroundColor
+                } else {
+                    chunk.backgroundColor = unsafeSegmentBackgroundColor
+                    chunk.foregroundColor = unsafeSegmentForegroundColor
+                }
             }
+            if clutchModeEnabled, clutchSelectedSegmentIndex == segment.segmentIndex {
+                chunk.backgroundColor = Color(red: 1.0, green: 190.0 / 255.0, blue: 56.0 / 255.0).opacity(0.4)
+            }
+            if let tapURL = outputSegmentTapURL(for: segment.segmentIndex) {
+                chunk.link = tapURL
+                chunk.foregroundColor = defaultOutputTextColor
+                chunk.underlineStyle = nil
+                chunk.underlineColor = .clear
+            }
+            combined += chunk
         }
-        return chunk
+        return combined
+    }
+
+    private func outputSegmentTapURL(for segmentIndex: Int) -> URL? {
+        URL(string: "prebabellens-clutch://segment/\(segmentIndex)")
+    }
+
+    private func handleOutputOpenURL(_ url: URL) -> OpenURLAction.Result {
+        guard url.scheme == "prebabellens-clutch" else { return .systemAction }
+        guard url.host == "segment" else { return .handled }
+        guard let segmentIndex = Int(url.lastPathComponent) else { return .handled }
+        handleOutputSegmentTap(segmentIndex)
+        return .handled
     }
 
     private func clutchOutputHighlightBackground(for segmentIndex: Int) -> Color {
