@@ -647,6 +647,8 @@ struct TranslationView: View {
             highlightedRange: sourceHighlightRange,
             centerOnHighlightIfNeeded: shouldAutoCenterSourceForClutch,
             topAlignOnHighlightScroll: shouldTopAlignSourceForClutch,
+            lockDownwardScrollForRestore: canUseCompactOutputReadingMode && isCompactOutputReadingMode,
+            onDownwardSwipeWhileRestoreLocked: handleSourceRestoreSwipeGesture,
             onScrollStateChanged: handleSourceScrollStateChange,
             onCursorLocationChanged: handleSourceCursorLocationChange
         )
@@ -723,15 +725,6 @@ struct TranslationView: View {
                         .padding(.top, 12)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 12)
-                        .overlay(alignment: .top) {
-                            GeometryReader { geometryProxy in
-                                Color.clear.preference(
-                                    key: OutputScrollOffsetPreferenceKey.self,
-                                    value: geometryProxy.frame(in: .named(outputScrollCoordinateSpaceName)).minY
-                                )
-                            }
-                            .frame(height: 0)
-                        }
                 }
                 .onChange(of: clutchSelectedSegmentIndex) { _, segmentIndex in
                     guard clutchModeEnabled else { return }
@@ -747,22 +740,11 @@ struct TranslationView: View {
                 }
             }
             .coordinateSpace(name: outputScrollCoordinateSpaceName)
-            .onPreferenceChange(OutputScrollOffsetPreferenceKey.self) { minY in
-                handleOutputScrollOffsetChange(minY)
-            }
-            .scrollDisabled(isOutputScrollLocked)
-            .simultaneousGesture(outputCollapseActivationGesture, including: .gesture)
             #if os(iOS)
             .frame(maxHeight: .infinity, alignment: .top)
             .simultaneousGesture(editorPinchGesture(host: .output), including: .gesture)
             #else
             .frame(minHeight: editorMinHeight, maxHeight: .infinity, alignment: .top)
-            .onAppear {
-                installMacTopEdgeWheelMonitorIfNeeded()
-            }
-            .onDisappear {
-                uninstallMacTopEdgeWheelMonitor()
-            }
             #endif
             .clipped()
             #if os(iOS)
@@ -1119,9 +1101,8 @@ struct TranslationView: View {
     private var compactOutputExpandReleaseOffset: CGFloat { 8 }
 
     private var canUseCompactOutputReadingMode: Bool {
-        isCompactStackedLayoutActive
-            && !viewModel.isTranslating
-            && !viewModel.translatedText.isEmpty
+        // Temporarily disabled by product decision.
+        false
     }
 
     private var isOutputScrollLocked: Bool {
@@ -1249,10 +1230,11 @@ struct TranslationView: View {
         topSpringDistance: CGFloat,
         isDragging: Bool
     ) {
+        guard canUseCompactOutputReadingMode, isCompactOutputReadingMode else { return }
+
         let previousDistance = currentSourceScrollDistance
         previousSourceScrollDistance = previousDistance
         currentSourceScrollDistance = scrollDistanceFromTop
-        guard canUseCompactOutputReadingMode, isCompactOutputReadingMode else { return }
         if !isDragging {
             isSourceExpandSpringArmed = false
             return
@@ -1266,6 +1248,13 @@ struct TranslationView: View {
         guard !isSourceExpandSpringArmed else { return }
         isSourceExpandSpringArmed = true
         // Match Output behavior: first downward swipe restores field heights.
+        restoreDefaultFieldSizesFromCompactMode()
+    }
+
+    private func handleSourceRestoreSwipeGesture() {
+        guard canUseCompactOutputReadingMode, isCompactOutputReadingMode else { return }
+        guard !isSourceExpandSpringArmed else { return }
+        isSourceExpandSpringArmed = true
         restoreDefaultFieldSizesFromCompactMode()
     }
 
@@ -1680,6 +1669,8 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
     let highlightedRange: NSRange?
     let centerOnHighlightIfNeeded: Bool
     let topAlignOnHighlightScroll: Bool
+    let lockDownwardScrollForRestore: Bool
+    let onDownwardSwipeWhileRestoreLocked: () -> Void
     let onScrollStateChanged: (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void
     let onCursorLocationChanged: (Int) -> Void
 
@@ -1687,6 +1678,7 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
         Coordinator(
             text: $text,
             onCursorLocationChanged: onCursorLocationChanged,
+            onDownwardSwipeWhileRestoreLocked: onDownwardSwipeWhileRestoreLocked,
             onScrollStateChanged: onScrollStateChanged
         )
     }
@@ -1715,6 +1707,7 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
         if uiView.font?.pointSize != fontSize {
             uiView.font = UIFont.systemFont(ofSize: fontSize)
         }
+        context.coordinator.updateScrollBehavior(lockDownwardScrollForRestore: lockDownwardScrollForRestore)
         context.coordinator.performProgrammaticUpdate {
             uiView.applyClutchHighlight(
                 highlightedRange,
@@ -1727,22 +1720,34 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         @Binding private var text: String
         private let onCursorLocationChanged: (Int) -> Void
+        private let onDownwardSwipeWhileRestoreLocked: () -> Void
         private let onScrollStateChanged: (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void
         private weak var textView: UITextView?
         private var isProgrammaticUpdateInProgress: Bool = false
+        private var lockDownwardScrollForRestore: Bool = false
+        private var previousContentOffsetY: CGFloat?
 
         init(
             text: Binding<String>,
             onCursorLocationChanged: @escaping (Int) -> Void,
+            onDownwardSwipeWhileRestoreLocked: @escaping () -> Void,
             onScrollStateChanged: @escaping (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void
         ) {
             _text = text
             self.onCursorLocationChanged = onCursorLocationChanged
+            self.onDownwardSwipeWhileRestoreLocked = onDownwardSwipeWhileRestoreLocked
             self.onScrollStateChanged = onScrollStateChanged
         }
 
         func attachTextView(_ textView: UITextView) {
             self.textView = textView
+        }
+
+        func updateScrollBehavior(lockDownwardScrollForRestore: Bool) {
+            self.lockDownwardScrollForRestore = lockDownwardScrollForRestore
+            if !lockDownwardScrollForRestore {
+                previousContentOffsetY = nil
+            }
         }
 
         func performProgrammaticUpdate(_ action: () -> Void) {
@@ -1792,18 +1797,27 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            let previousY = previousContentOffsetY ?? scrollView.contentOffset.y
+            if lockDownwardScrollForRestore, scrollView.isDragging, scrollView.contentOffset.y < previousY {
+                onDownwardSwipeWhileRestoreLocked()
+                scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: previousY), animated: false)
+            }
+            previousContentOffsetY = scrollView.contentOffset.y
             reportSourceScrollState(from: scrollView)
         }
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            previousContentOffsetY = scrollView.contentOffset.y
             reportSourceScrollState(from: scrollView)
         }
 
         func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate _: Bool) {
+            previousContentOffsetY = scrollView.contentOffset.y
             reportSourceScrollState(from: scrollView)
         }
 
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            previousContentOffsetY = scrollView.contentOffset.y
             reportSourceScrollState(from: scrollView)
         }
 
