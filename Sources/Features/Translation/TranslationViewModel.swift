@@ -1059,11 +1059,7 @@ final class TranslationViewModel: ObservableObject {
     }
 
     private func localized(_ key: String, defaultValue: String) -> String {
-        #if SWIFT_PACKAGE
-        let bundle = Bundle.module
-        #else
         let bundle = Bundle.main
-        #endif
         return NSLocalizedString(key, bundle: bundle, value: defaultValue, comment: "")
     }
 
