@@ -122,12 +122,53 @@ struct PreBabelLens: App {
     }
 
     private static func launchInputText() -> String? {
-        let args = Array(ProcessInfo.processInfo.arguments.dropFirst())
+        extractLaunchInputText(from: ProcessInfo.processInfo.arguments)
+    }
+
+    nonisolated static func extractLaunchInputText(from processArguments: [String]) -> String? {
+        let args = Array(processArguments.dropFirst())
         guard !args.isEmpty else { return nil }
 
-        let combined = args.joined(separator: " ")
+        var textArgs: [String] = []
+        var index = 0
+        while index < args.count {
+            let arg = args[index]
+
+            if arg == "--" {
+                let remainderStart = args.index(after: index)
+                if remainderStart < args.endIndex {
+                    textArgs.append(contentsOf: args[remainderStart...])
+                }
+                break
+            }
+
+            if arg.hasPrefix("-") {
+                if optionConsumesValue(arg),
+                   index + 1 < args.count,
+                   !args[index + 1].hasPrefix("-") {
+                    index += 2
+                    continue
+                }
+                index += 1
+                continue
+            }
+
+            textArgs.append(arg)
+            index += 1
+        }
+
+        let combined = textArgs.joined(separator: " ")
         let trimmed = combined.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    nonisolated private static func optionConsumesValue(_ option: String) -> Bool {
+        switch option {
+        case "-AppleLanguages", "-AppleLocale":
+            return true
+        default:
+            return false
+        }
     }
 
 #if os(macOS)

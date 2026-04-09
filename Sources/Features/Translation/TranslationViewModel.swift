@@ -1057,7 +1057,12 @@ final class TranslationViewModel: ObservableObject {
     }
 
     private func localized(_ key: String, defaultValue: String) -> String {
-        NSLocalizedString(key, bundle: .module, value: defaultValue, comment: "")
+        #if SWIFT_PACKAGE
+        let bundle = Bundle.module
+        #else
+        let bundle = Bundle.main
+        #endif
+        return NSLocalizedString(key, bundle: bundle, value: defaultValue, comment: "")
     }
 
     private func makeStatusNotices(output: TranslationOutput, request: TranslationRequest) -> [StatusNotice] {
