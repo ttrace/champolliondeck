@@ -194,8 +194,10 @@ struct TranslationView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("Done") {
+                    Button {
                         dismissKeyboard()
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
                     }
                 }
             }
@@ -211,8 +213,10 @@ struct TranslationView: View {
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
-                        Button("Done") {
+                        Button {
                             dismissKeyboard()
+                        } label: {
+                            Image(systemName: "keyboard.chevron.compact.down")
                         }
                     }
                 }
@@ -875,7 +879,7 @@ struct TranslationView: View {
 
     private func clutchOutputHighlightBackground(for segmentIndex: Int) -> Color {
         guard clutchModeEnabled, clutchSelectedSegmentIndex == segmentIndex else { return .clear }
-        return Color.accentColor.opacity(colorScheme == .dark ? 0.24 : 0.14)
+        return Color(red: 1.0, green: 190.0 / 255.0, blue: 56.0 / 255.0).opacity(0.4)
     }
 
     private var unsafeRecoveredSegmentBackgroundColor: Color {
@@ -1818,10 +1822,6 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
             let toolbar = UIToolbar()
             toolbar.sizeToFit()
 
-            let retranslate = UIBarButtonItem(title: "再翻訳", style: .plain, target: nil, action: nil)
-            retranslate.isEnabled = false
-            let proofread = UIBarButtonItem(title: "AI校正", style: .plain, target: nil, action: nil)
-            proofread.isEnabled = false
             let spacer = UIBarButtonItem(barButtonSystemItem: .flexibleSpace, target: nil, action: nil)
             let doneStyle: UIBarButtonItem.Style
             if #available(iOS 26.0, *) {
@@ -1829,9 +1829,10 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
             } else {
                 doneStyle = .done
             }
-            let done = UIBarButtonItem(title: "OK", style: doneStyle, target: self, action: #selector(doneTapped))
+            let doneImage = UIImage(systemName: "keyboard.chevron.compact.down")
+            let done = UIBarButtonItem(image: doneImage, style: doneStyle, target: self, action: #selector(doneTapped))
 
-            toolbar.items = [retranslate, proofread, spacer, done]
+            toolbar.items = [spacer, done]
             return toolbar
         }
 
@@ -1912,7 +1913,7 @@ private extension UITextView {
         {
             textStorage.addAttribute(
                 .backgroundColor,
-                value: UIColor.systemBlue.withAlphaComponent(0.20),
+                value: UIColor(red: 1.0, green: 190.0 / 255.0, blue: 56.0 / 255.0, alpha: 0.4),
                 range: range
             )
         }
@@ -2036,11 +2037,17 @@ private struct MacSourceTextEditor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context _: Context) {
         guard let textView = nsView.documentView as? DropAwareTextView else { return }
-        if textView.string != text {
+        let isComposingIME = textView.hasMarkedText()
+
+        // Avoid touching text storage while IME composition is active.
+        if !isComposingIME, textView.string != text {
             textView.string = text
         }
         if textView.font?.pointSize != fontSize {
             textView.font = NSFont.systemFont(ofSize: fontSize)
+        }
+        if isComposingIME {
+            return
         }
         textView.applyClutchHighlight(
             highlightedRange,
@@ -2061,11 +2068,17 @@ private struct MacSourceTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             text = textView.string
+            if textView.hasMarkedText() {
+                return
+            }
             onCursorLocationChanged(textView.selectedRange().location)
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
+            if textView.hasMarkedText() {
+                return
+            }
             onCursorLocationChanged(textView.selectedRange().location)
         }
 
@@ -2078,7 +2091,7 @@ private struct MacSourceTextEditor: NSViewRepresentable {
 
 private final class DropAwareTextView: NSTextView {
     private let clutchHighlightAttribute = NSAttributedString.Key.backgroundColor
-    private let clutchHighlightColor = NSColor.systemBlue.withAlphaComponent(0.18)
+    private let clutchHighlightColor = NSColor(calibratedRed: 1.0, green: 190.0 / 255.0, blue: 56.0 / 255.0, alpha: 0.4)
     var onDropResolvedText: ((String) -> Void)?
 
     override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
