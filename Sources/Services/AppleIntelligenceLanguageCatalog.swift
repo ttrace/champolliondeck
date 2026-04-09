@@ -39,9 +39,8 @@ enum AppleIntelligenceLanguageCatalog {
         "nb", "nl", "pt", "sv", "tr", "vi", "zh"
     ]
     private static let translationFrameworkFallbackLanguageCodes: [String] = [
-        "ar", "cs", "da", "de", "el", "en", "en-GB", "es", "fi", "fr", "he", "hi",
-        "hu", "id", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ro",
-        "ru", "sk", "sv", "th", "tr", "uk", "vi", "zh", "zh-Hant"
+        "ar", "de", "en", "en-GB", "es", "fr", "hi", "id", "it", "ja", "ko",
+        "nl", "pl", "pt", "ru", "th", "tr", "uk", "vi", "zh", "zh-Hant"
     ]
 
     static func supportedLanguageOptions(locale: Locale = .current) -> [TargetLanguageOption] {
