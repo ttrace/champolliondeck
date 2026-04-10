@@ -1,5 +1,8 @@
 import UniformTypeIdentifiers
 import UIKit
+#if canImport(PDFKit)
+import PDFKit
+#endif
 
 final class ShareViewController: UIViewController {
     private let cardView = UIView()
@@ -114,17 +117,117 @@ final class ShareViewController: UIViewController {
             if accessing { url.stopAccessingSecurityScopedResource() }
         }
 
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            return nil
+        }
+
+        let lowercasedExtension = url.pathExtension.lowercased()
+
+        if lowercasedExtension == "pdf",
+           let extracted = extractTextFromPDF(url),
+           !extracted.isEmpty
+        {
+            return String(extracted.prefix(10_000))
+        }
+
+        if ["doc", "docx", "pages"].contains(lowercasedExtension),
+           let extracted = extractTextWithAttributedString(from: url),
+           !extracted.isEmpty
+        {
+            return String(extracted.prefix(10_000))
+        }
+
         guard let data = try? Data(contentsOf: url) else { return nil }
-        if let utf8 = String(data: data, encoding: .utf8) {
+        if let utf8 = String(data: data, encoding: .utf8), !utf8.isEmpty {
             return String(utf8.prefix(10_000))
         }
-        if let utf16 = String(data: data, encoding: .utf16) {
+        if let utf16 = String(data: data, encoding: .utf16), !utf16.isEmpty {
             return String(utf16.prefix(10_000))
         }
-        if let shiftJIS = String(data: data, encoding: .shiftJIS) {
+        if let shiftJIS = String(data: data, encoding: .shiftJIS), !shiftJIS.isEmpty {
             return String(shiftJIS.prefix(10_000))
         }
         return nil
+    }
+
+    nonisolated private static func extractTextWithAttributedString(from fileURL: URL) -> String? {
+        if let attributed = try? NSAttributedString(
+            url: fileURL,
+            options: [:],
+            documentAttributes: nil
+        ) {
+            let text = attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                return text
+            }
+        }
+        return nil
+    }
+
+    nonisolated private static func extractTextFromPDF(_ fileURL: URL) -> String? {
+        #if canImport(PDFKit)
+        guard let document = PDFDocument(url: fileURL) else { return nil }
+
+        var pages: [String] = []
+        pages.reserveCapacity(document.pageCount)
+
+        for pageIndex in 0..<document.pageCount {
+            guard let page = document.page(at: pageIndex) else { continue }
+            let text = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                pages.append(normalizePDFSoftLineBreaks(text))
+            }
+        }
+
+        let combined = pages.joined(separator: "\n\n")
+        return combined.isEmpty ? nil : combined
+        #else
+        return nil
+        #endif
+    }
+
+    nonisolated private static func normalizePDFSoftLineBreaks(_ text: String) -> String {
+        let lines = text.components(separatedBy: .newlines)
+        guard !lines.isEmpty else { return text }
+
+        var resultLines: [String] = []
+        resultLines.reserveCapacity(lines.count)
+        var keepLineBreakBeforeNext = true
+
+        for rawLine in lines {
+            let trimmedLine = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if trimmedLine.isEmpty {
+                if !resultLines.isEmpty, resultLines.last != "" {
+                    resultLines.append("")
+                }
+                keepLineBreakBeforeNext = true
+                continue
+            }
+
+            guard var last = resultLines.last, !last.isEmpty else {
+                resultLines.append(trimmedLine)
+                keepLineBreakBeforeNext = shouldKeepLineBreak(afterRawLine: rawLine)
+                continue
+            }
+
+            if keepLineBreakBeforeNext {
+                resultLines.append(trimmedLine)
+                keepLineBreakBeforeNext = shouldKeepLineBreak(afterRawLine: rawLine)
+                continue
+            }
+
+            last += " " + trimmedLine
+            resultLines[resultLines.count - 1] = last
+            keepLineBreakBeforeNext = shouldKeepLineBreak(afterRawLine: rawLine)
+        }
+
+        return resultLines.joined(separator: "\n")
+    }
+
+    nonisolated private static func shouldKeepLineBreak(afterRawLine rawLine: String) -> Bool {
+        rawLine.range(of: #"[.。？]\s*$"#, options: .regularExpression) != nil
     }
 
     @MainActor
