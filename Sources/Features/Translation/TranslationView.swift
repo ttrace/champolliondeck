@@ -2301,46 +2301,190 @@ private enum SourceDropImport {
         let lines = text.components(separatedBy: .newlines)
         guard !lines.isEmpty else { return text }
 
+        let headingDataLengthThreshold = shortHeadingDataThreshold(for: lines)
         var resultLines: [String] = []
         resultLines.reserveCapacity(lines.count)
-        var keepLineBreakBeforeNext = true
+        var previousLineForcesBreak = true
+        var verticalWritingMode = false
 
-        for rawLine in lines {
+        for (lineIndex, rawLine) in lines.enumerated() {
             let trimmedLine = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
 
             if trimmedLine.isEmpty {
                 if !resultLines.isEmpty, resultLines.last != "" {
                     resultLines.append("")
                 }
-                keepLineBreakBeforeNext = true
+                previousLineForcesBreak = true
+                verticalWritingMode = false
                 continue
             }
 
-            guard var last = resultLines.last, !last.isEmpty else {
+            if !verticalWritingMode {
+                let verticalRunCount = consecutiveVerticalCandidateCount(from: lineIndex, in: lines)
+                if verticalRunCount >= 3 {
+                    verticalWritingMode = true
+                }
+            }
+
+            let isLineEndMarker = shouldKeepLineBreak(afterRawLine: rawLine)
+            let isBulletLine = isBulletLikeLine(trimmedLine)
+            let isNumericDataLine = isNumericDataOnlyLine(trimmedLine)
+            let isShortHeadingDataLine = isShortHeadingOrDataLine(
+                trimmedLine,
+                threshold: headingDataLengthThreshold
+            )
+            let blocksIncomingSoftJoin = isBulletLine || isNumericDataLine
+            let blocksOutgoingSoftJoin = isBulletLine || isNumericDataLine || isShortHeadingDataLine
+
+            if verticalWritingMode {
+                if
+                    var last = resultLines.last,
+                    !last.isEmpty
+                {
+                    last += trimmedLine
+                    resultLines[resultLines.count - 1] = last
+                } else {
+                    resultLines.append(trimmedLine)
+                }
+            } else if
+                !previousLineForcesBreak,
+                !blocksIncomingSoftJoin,
+                var last = resultLines.last,
+                !last.isEmpty
+            {
+                if shouldJoinWithoutSpace(previousLine: last) {
+                    last += trimmedLine
+                } else {
+                    last += " " + trimmedLine
+                }
+                resultLines[resultLines.count - 1] = last
+            } else {
                 resultLines.append(trimmedLine)
-                keepLineBreakBeforeNext = shouldKeepLineBreak(afterRawLine: rawLine)
-                continue
             }
 
-            if keepLineBreakBeforeNext {
-                resultLines.append(trimmedLine)
-                keepLineBreakBeforeNext = shouldKeepLineBreak(afterRawLine: rawLine)
-                continue
+            if isLineEndMarker {
+                verticalWritingMode = false
             }
-
-            last += " " + trimmedLine
-            resultLines[resultLines.count - 1] = last
-            keepLineBreakBeforeNext = shouldKeepLineBreak(afterRawLine: rawLine)
+            previousLineForcesBreak = isLineEndMarker || blocksOutgoingSoftJoin
         }
 
         return resultLines.joined(separator: "\n")
     }
 
     private static func shouldKeepLineBreak(afterRawLine rawLine: String) -> Bool {
-        // Keep the line break only when the line ends with one of:
-        // . 。 ？
-        // followed by optional trailing spaces before the newline.
-        rawLine.range(of: #"[.。？]\s*$"#, options: .regularExpression) != nil
+        guard let trailing = lastNonWhitespaceCharacter(in: rawLine) else { return false }
+        return isLineEndMarkerCharacter(trailing)
+    }
+
+    private static func isLineEndMarkerCharacter(_ character: Character) -> Bool {
+        switch character {
+        case ".", "。", "!", "?", "！", "？",
+             ")", "]", "}", "）", "］", "｝", "〉", "》", "」", "』", "】", "〙", "〗":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isBulletLikeLine(_ trimmedLine: String) -> Bool {
+        let leadingTrimmed = trimmedLine.trimmingCharacters(in: .whitespaces)
+        guard !leadingTrimmed.isEmpty else { return false }
+
+        if let first = leadingTrimmed.first, ["・", "＊", "ー", "-"].contains(first) {
+            return true
+        }
+
+        var index = leadingTrimmed.startIndex
+        var digitCount = 0
+        while index < leadingTrimmed.endIndex, leadingTrimmed[index].isNumber {
+            digitCount += 1
+            index = leadingTrimmed.index(after: index)
+        }
+
+        if digitCount > 0, index < leadingTrimmed.endIndex {
+            let delimiter = leadingTrimmed[index]
+            if delimiter == "." || delimiter == ":" || delimiter == ";" {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func isNumericDataOnlyLine(_ trimmedLine: String) -> Bool {
+        guard !trimmedLine.isEmpty else { return false }
+        return trimmedLine.range(of: #"^[0-9/:\s]+$"#, options: .regularExpression) != nil
+    }
+
+    private static func shortHeadingDataThreshold(for lines: [String]) -> Int {
+        let introMax = lines
+            .prefix(30)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).count }
+            .max() ?? 0
+        return introMax / 2
+    }
+
+    private static func isShortHeadingOrDataLine(_ trimmedLine: String, threshold: Int) -> Bool {
+        guard threshold > 0 else { return false }
+        return !trimmedLine.isEmpty && trimmedLine.count <= threshold
+    }
+
+    private static func consecutiveVerticalCandidateCount(from startIndex: Int, in allLines: [String]) -> Int {
+        var index = startIndex
+        var count = 0
+        while index < allLines.count {
+            let trimmed = allLines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            if isSingleCJKVerticalCandidate(trimmed) {
+                count += 1
+                index += 1
+            } else {
+                break
+            }
+        }
+        return count
+    }
+
+    private static func isSingleCJKVerticalCandidate(_ line: String) -> Bool {
+        guard line.count == 1, let first = line.first else { return false }
+        return first.unicodeScalars.allSatisfy(isCJKExcludingHangul)
+    }
+
+    private static func shouldJoinWithoutSpace(previousLine: String) -> Bool {
+        guard let trailing = lastNonWhitespaceCharacter(in: previousLine) else { return false }
+        return trailing.unicodeScalars.allSatisfy(isCJKExcludingHangul)
+    }
+
+    private static func lastNonWhitespaceCharacter(in text: String) -> Character? {
+        text.last(where: { !$0.isWhitespace })
+    }
+
+    private static func isCJKExcludingHangul(_ scalar: UnicodeScalar) -> Bool {
+        let value = scalar.value
+
+        switch value {
+        case 0x1100...0x11FF, 0x3130...0x318F, 0xA960...0xA97F, 0xAC00...0xD7AF, 0xD7B0...0xD7FF:
+            return false
+        default:
+            break
+        }
+
+        switch value {
+        case 0x2E80...0x2EFF,
+             0x3000...0x303F,
+             0x3040...0x30FF,
+             0x31F0...0x31FF,
+             0x3400...0x4DBF,
+             0x4E00...0x9FFF,
+             0xF900...0xFAFF,
+             0x20000...0x2A6DF,
+             0x2A700...0x2B73F,
+             0x2B740...0x2B81F,
+             0x2B820...0x2CEAF,
+             0x2CEB0...0x2EBEF,
+             0x30000...0x3134F:
+            return true
+        default:
+            return false
+        }
     }
 
     static func fileURL(fromDroppedText text: String) -> URL? {
