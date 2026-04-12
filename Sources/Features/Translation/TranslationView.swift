@@ -17,6 +17,7 @@ import SwiftUI
     import PhotosUI
     import UniformTypeIdentifiers
     import Vision
+    import VisionKit
     #if canImport(PDFKit)
         import PDFKit
     #endif
@@ -31,6 +32,11 @@ struct TranslationView: View {
     private enum PinchOverlayHost {
         case source
         case output
+    }
+
+    private enum ImportToastPlacement {
+        case bottom
+        case sourceFieldCenter
     }
     #endif
 
@@ -50,6 +56,8 @@ struct TranslationView: View {
     @State private var isFileImportPickerPresented: Bool = false
     @State private var isPhotoPickerPresented: Bool = false
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isImportLoading: Bool = false
+    @State private var importToastPlacement: ImportToastPlacement = .bottom
     #endif
     @State private var isMacCompactLayoutActive: Bool = false
     @State private var isIOSDesktopLayoutActive: Bool = false
@@ -132,7 +140,7 @@ struct TranslationView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             #if os(iOS)
-            if let importToastMessage {
+            if let importToastMessage, importToastPlacement == .bottom, !isImportLoading {
                 VStack {
                     Spacer()
                     importToast(text: importToastMessage)
@@ -725,6 +733,19 @@ struct TranslationView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         #if os(iOS)
         .background(Color.clear)
+        .overlay {
+            if isImportLoading {
+                importToast(text: importLoadingToastTitle)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .allowsHitTesting(false)
+            } else if let importToastMessage, importToastPlacement == .sourceFieldCenter {
+                importToast(text: importToastMessage)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .allowsHitTesting(false)
+            }
+        }
         #else
         .background {
             if usesCompactDesktopLayout {
@@ -1560,14 +1581,24 @@ struct TranslationView: View {
         switch result {
         case let .success(urls):
             guard let url = urls.first else { return }
+            let isImageImport = isImageExtension(url.pathExtension.lowercased())
             Task { @MainActor in
-                guard let text = loadImportedText(from: url) else {
-                    showImportToast(localized("ui.import.ocr_failed", defaultValue: "Could not read text."))
+                isImportLoading = true
+                defer { isImportLoading = false }
+
+                guard let text = await loadImportedText(from: url) else {
+                    showImportToast(
+                        localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                        placement: isImageImport ? .sourceFieldCenter : .bottom
+                    )
                     return
                 }
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else {
-                    showImportToast(localized("ui.import.ocr_failed", defaultValue: "Could not read text."))
+                    showImportToast(
+                        localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                        placement: isImageImport ? .sourceFieldCenter : .bottom
+                    )
                     return
                 }
                 viewModel.handleSourceTextPasted(text)
@@ -1578,8 +1609,12 @@ struct TranslationView: View {
     }
 
     private func handlePickedPhotoItem(_ item: PhotosPickerItem) async {
+        await MainActor.run {
+            isImportLoading = true
+        }
         defer {
             Task { @MainActor in
+                isImportLoading = false
                 selectedPhotoItem = nil
             }
         }
@@ -1587,15 +1622,20 @@ struct TranslationView: View {
         guard let data = try? await item.loadTransferable(type: Data.self) else { return }
         guard let text = await recognizeTextInImageData(data) else {
             await MainActor.run {
-                showImportToast(localized("ui.import.ocr_failed", defaultValue: "Could not read text."))
+                showImportToast(
+                    localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                    placement: .sourceFieldCenter
+                )
             }
             return
         }
-        let normalized = Self.normalizePDFSoftLineBreaksOnIOS(text)
-        let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             await MainActor.run {
-                showImportToast(localized("ui.import.ocr_failed", defaultValue: "Could not read text."))
+                showImportToast(
+                    localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                    placement: .sourceFieldCenter
+                )
             }
             return
         }
@@ -1608,6 +1648,11 @@ struct TranslationView: View {
         let recognitionLanguages = await MainActor.run {
             recognitionLanguageCandidatesForOCR()
         }
+        if let transcript = await recognizeTextWithImageAnalysisTranscript(data),
+           let normalized = Self.normalizedRecognizedImageImportText(transcript) {
+            return normalized
+        }
+
         let task = Task.detached(priority: .userInitiated) { () -> String? in
             guard let image = UIImage(data: data) else { return nil }
             guard let cgImage = image.cgImage else { return nil }
@@ -1643,11 +1688,30 @@ struct TranslationView: View {
             guard let observations = request.results else { return nil }
             let lines = observations.compactMap { $0.topCandidates(1).first?.string }
             let joined = lines.joined(separator: "\n")
-            guard !joined.isEmpty else { return nil }
-            let normalized = Self.normalizePDFSoftLineBreaksOnIOS(joined)
-            return normalized.isEmpty ? nil : normalized
+            return Self.normalizedRecognizedImageImportText(joined)
         }
         return await task.value
+    }
+
+    private func recognizeTextWithImageAnalysisTranscript(_ data: Data) async -> String? {
+        guard #available(iOS 16.0, *) else { return nil }
+        guard let image = UIImage(data: data) else { return nil }
+
+        do {
+            let analyzer = ImageAnalyzer()
+            let configuration = ImageAnalyzer.Configuration([.text])
+            let analysis = try await analyzer.analyze(image, configuration: configuration)
+            return analysis.transcript
+        } catch {
+            return nil
+        }
+    }
+
+    private nonisolated static func normalizedRecognizedImageImportText(_ text: String) -> String? {
+        guard !text.isEmpty else { return nil }
+        let normalized = Self.normalizePDFSoftLineBreaksOnIOS(text)
+        let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func recognitionLanguageCandidatesForOCR() -> [String] {
@@ -1743,7 +1807,7 @@ struct TranslationView: View {
         return map
     }
 
-    private func loadImportedText(from fileURL: URL) -> String? {
+    private func loadImportedText(from fileURL: URL) async -> String? {
         let hasSecurityScope = fileURL.startAccessingSecurityScopedResource()
         defer {
             if hasSecurityScope {
@@ -1760,7 +1824,7 @@ struct TranslationView: View {
 
         if isImageExtension(lowercasedExtension),
            let data = try? Data(contentsOf: fileURL) {
-            return extractTextFromImageDataOnIOS(data)
+            return await recognizeTextInImageData(data)
         }
 
         if lowercasedExtension == "pdf",
@@ -2103,11 +2167,12 @@ struct TranslationView: View {
     }
 
     private func showImportToast() {
-        showImportToast(sharedImportToastTitle)
+        showImportToast(sharedImportToastTitle, placement: .bottom)
     }
 
-    private func showImportToast(_ message: String) {
+    private func showImportToast(_ message: String, placement: ImportToastPlacement = .bottom) {
         toastDismissTask?.cancel()
+        importToastPlacement = placement
         importToastMessage = message
         toastDismissTask = Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -2115,6 +2180,7 @@ struct TranslationView: View {
             await MainActor.run {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     importToastMessage = nil
+                    importToastPlacement = .bottom
                 }
             }
         }
@@ -2126,6 +2192,10 @@ struct TranslationView: View {
 
     private var sharedImportToastTitle: String {
         localized("ui.import.shared_text_imported", defaultValue: "Shared text imported.")
+    }
+
+    private var importLoadingToastTitle: String {
+        localized("ui.import.loading", defaultValue: "Loading...")
     }
 
     private func dismissKeyboard() {

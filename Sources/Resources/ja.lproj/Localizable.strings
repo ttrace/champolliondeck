@@ -37,6 +37,7 @@
 "ui.import.files" = "ファイル";
 "ui.import.album" = "アルバム";
 "ui.import.ocr_failed" = "文字を読み取れませんでした";
+"ui.import.loading" = "読み込み中";
 "ui.action.clear" = "クリア";
 "ui.action.copy_output" = "出力をコピー";
 "ui.action.close" = "閉じる";

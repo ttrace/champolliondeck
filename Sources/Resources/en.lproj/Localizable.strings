@@ -37,6 +37,7 @@
 "ui.import.files" = "Files";
 "ui.import.album" = "Album";
 "ui.import.ocr_failed" = "Could not read text.";
+"ui.import.loading" = "Loading...";
 "ui.action.clear" = "Clear";
 "ui.action.copy_output" = "Copy output";
 "ui.action.close" = "Close";

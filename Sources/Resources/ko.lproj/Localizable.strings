@@ -37,6 +37,7 @@
 "ui.import.files" = "파일";
 "ui.import.album" = "앨범";
 "ui.import.ocr_failed" = "텍스트를 읽을 수 없습니다.";
+"ui.import.loading" = "불러오는 중";
 "ui.action.clear" = "지우기";
 "ui.action.copy_output" = "출력 복사";
 "ui.action.close" = "닫기";
