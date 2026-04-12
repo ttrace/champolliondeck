@@ -118,6 +118,36 @@ Preprocessing should be conservative:
 - prefer candidate labeling over hard assumptions
 - avoid irreversible normalization unless necessary
 
+## PDF Import Line-Break Normalization Spec
+Applies to both:
+- macOS Source file import path
+- iOS Share Extension file import path
+
+Definitions:
+- `line-end marker`: `.。!?！？` and closing brackets.
+- closing brackets set: `) ] } ） ］ ｝ 〉 》 」 』 】 〙 〗`
+
+Rules:
+1. PDF text is extracted page-by-page and normalized before page-join.
+2. A line whose original line-head is one of `・ ＊ ー -`, or matches `^[0-9]+[.:;]`, is treated as bullet/list.
+3. Bullet/list lines always keep their line break (their line end is not soft-joined).
+4. Vertical-writing heuristic:
+   - If single-character CJK (excluding Hangul) lines continue for 3+ lines, treat as vertical text.
+   - In that region, concatenate lines with no spaces.
+   - Continue until a line-end marker appears.
+5. CJK no-space join rule:
+   - When soft-joining, if the character before the removed line break is CJK (excluding Hangul), join without inserting a space.
+   - Otherwise, insert one ASCII space.
+6. Numeric-only data line rule:
+   - A line matching `^[0-9/:\\s]+$` is treated as data row and is not soft-joined.
+7. Intro-line short heading/data rule:
+   - Compute max line length from the first 30 lines (after trim).
+   - Any non-empty line with length `<= floor(max/2)` is treated as heading/data and is not soft-joined.
+   - This rule applies to that line's outgoing edge only:
+     previous line may still join into the short line,
+     but the short line does not soft-join into the next line.
+8. Empty lines are preserved as paragraph separators.
+
 ## Observability and Diagnostics
 - Append warnings/errors to the in-app Developer Console when available.
 - Prefer structured error details (`type`, `domain`, `code`, `userInfo`) over only localized messages.
