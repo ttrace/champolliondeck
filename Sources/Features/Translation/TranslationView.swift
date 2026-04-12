@@ -3,6 +3,14 @@ import SwiftUI
 #if os(macOS)
     import AppKit
     import CoreServices
+    import ImageIO
+    #if canImport(UniformTypeIdentifiers)
+        import UniformTypeIdentifiers
+    #endif
+    import Vision
+    #if canImport(VisionKit)
+        import VisionKit
+    #endif
     #if canImport(PDFKit)
         import PDFKit
     #endif
@@ -12,6 +20,15 @@ import SwiftUI
 #endif
 #if canImport(UIKit)
     import UIKit
+#endif
+#if os(iOS)
+    import PhotosUI
+    import UniformTypeIdentifiers
+    import Vision
+    import VisionKit
+    #if canImport(PDFKit)
+        import PDFKit
+    #endif
 #endif
 
 struct TranslationView: View {
@@ -23,6 +40,11 @@ struct TranslationView: View {
     private enum PinchOverlayHost {
         case source
         case output
+    }
+
+    private enum ImportToastPlacement {
+        case bottom
+        case sourceFieldCenter
     }
     #endif
 
@@ -38,6 +60,13 @@ struct TranslationView: View {
     @AppStorage("editorFontScaleLevel") private var editorFontScaleLevel: Int = EditorFontScaleLevel.medium.rawValue
     @State private var importToastMessage: String?
     @State private var toastDismissTask: Task<Void, Never>?
+    #if os(iOS)
+    @State private var isFileImportPickerPresented: Bool = false
+    @State private var isPhotoPickerPresented: Bool = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isImportLoading: Bool = false
+    @State private var importToastPlacement: ImportToastPlacement = .bottom
+    #endif
     @State private var isMacCompactLayoutActive: Bool = false
     @State private var isIOSDesktopLayoutActive: Bool = false
     @State private var isCompactStackedLayoutActive: Bool = false
@@ -58,6 +87,9 @@ struct TranslationView: View {
     @State private var isClutchLayoutLocked: Bool = false
     #if os(macOS)
     @State private var macTopEdgeWheelMonitor: Any?
+    @State private var macImportLoading: Bool = false
+    @State private var macImportHUDMessage: String?
+    @State private var macImportHUDDismissTask: Task<Void, Never>?
     #endif
     #if os(iOS)
     @State private var pinchBaseFontScaleLevel: Int?
@@ -119,10 +151,10 @@ struct TranslationView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             #if os(iOS)
-            if let importToastMessage {
+            if let importToastMessage, importToastPlacement == .bottom, !isImportLoading {
                 VStack {
                     Spacer()
-                    importToast(text: importToastMessage)
+                    importHUDCapsule(text: importToastMessage)
                         .padding(.horizontal, 16)
                         .padding(.bottom, 28)
                 }
@@ -166,6 +198,30 @@ struct TranslationView: View {
                 return
             }
         }
+        #if os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: .pblImportHUDLoadingChanged)) { notification in
+            guard let isLoading = notification.userInfo?[ImportHUDNotificationKeys.loading] as? Bool else { return }
+            macImportLoading = isLoading
+            if isLoading {
+                macImportHUDDismissTask?.cancel()
+                macImportHUDMessage = nil
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pblImportHUDMessage)) { notification in
+            guard let message = notification.userInfo?[ImportHUDNotificationKeys.message] as? String else { return }
+            macImportHUDDismissTask?.cancel()
+            macImportHUDMessage = message
+            macImportHUDDismissTask = Task {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        macImportHUDMessage = nil
+                    }
+                }
+            }
+        }
+        #endif
         #if canImport(Translation)
         baseView
             .overlay {
@@ -183,6 +239,23 @@ struct TranslationView: View {
                 isJapaneseLocale: isJapaneseLocale,
                 handleSharedImportIfNeeded: handleSharedImportIfNeeded
             )
+            .fileImporter(
+                isPresented: $isFileImportPickerPresented,
+                allowedContentTypes: iOSImportContentTypes,
+                allowsMultipleSelection: false,
+                onCompletion: handleImportedDocumentResult
+            )
+            .photosPicker(
+                isPresented: $isPhotoPickerPresented,
+                selection: $selectedPhotoItem,
+                matching: .images
+            )
+            .onChange(of: selectedPhotoItem) { _, item in
+                guard let item else { return }
+                Task {
+                    await handlePickedPhotoItem(item)
+                }
+            }
             #else
             .translationViewLifecycleModifiers(
                 viewModel: viewModel,
@@ -210,6 +283,23 @@ struct TranslationView: View {
                     isJapaneseLocale: isJapaneseLocale,
                     handleSharedImportIfNeeded: handleSharedImportIfNeeded
                 )
+                .fileImporter(
+                    isPresented: $isFileImportPickerPresented,
+                    allowedContentTypes: iOSImportContentTypes,
+                    allowsMultipleSelection: false,
+                    onCompletion: handleImportedDocumentResult
+                )
+                .photosPicker(
+                    isPresented: $isPhotoPickerPresented,
+                    selection: $selectedPhotoItem,
+                    matching: .images
+                )
+                .onChange(of: selectedPhotoItem) { _, item in
+                    guard let item else { return }
+                    Task {
+                        await handlePickedPhotoItem(item)
+                    }
+                }
                 .toolbar {
                     ToolbarItemGroup(placement: .keyboard) {
                         Spacer()
@@ -638,6 +728,32 @@ struct TranslationView: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                 Spacer()
+                #if os(iOS)
+                Menu {
+                    Button {
+                        presentFileImporter()
+                    } label: {
+                        Label(
+                            localized("ui.import.files", defaultValue: "Files"),
+                            systemImage: isFileImportPickerPresented ? "folder.fill" : "folder"
+                        )
+                    }
+
+                    Button {
+                        presentPhotoPicker()
+                    } label: {
+                        Label(
+                            localized("ui.import.album", defaultValue: "Album"),
+                            systemImage: isPhotoPickerPresented ? "photo.on.rectangle.angled.fill" : "photo.on.rectangle.angled"
+                        )
+                    }
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .menuOrder(.fixed)
+                .buttonStyle(.bordered)
+                .accessibilityLabel(localized("ui.action.import", defaultValue: "Import"))
+                #endif
                 Button(localized("ui.action.paste", defaultValue: "Paste"), action: pasteInputFromClipboard)
                     .buttonStyle(.bordered)
                 Button(localized("ui.action.clear", defaultValue: "Clear")) {
@@ -652,6 +768,19 @@ struct TranslationView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         #if os(iOS)
         .background(Color.clear)
+        .overlay {
+            if isImportLoading {
+                importHUDCapsule(text: importLoadingToastTitle)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .allowsHitTesting(false)
+            } else if let importToastMessage, importToastPlacement == .sourceFieldCenter {
+                importHUDCapsule(text: importToastMessage)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .allowsHitTesting(false)
+            }
+        }
         #else
         .background {
             if usesCompactDesktopLayout {
@@ -659,6 +788,14 @@ struct TranslationView: View {
             } else {
                 RoundedRectangle(cornerRadius: cardCornerRadius)
                     .fill(colorScheme == .dark ? Color.black.opacity(0.5) : Color.white.opacity(0.7))
+            }
+        }
+        .overlay {
+            if macImportLoading || macImportHUDMessage != nil {
+                macImportHUDCapsule(text: macImportLoading ? macImportLoadingTitle : (macImportHUDMessage ?? ""))
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .allowsHitTesting(false)
             }
         }
         #endif
@@ -1440,6 +1577,23 @@ struct TranslationView: View {
         NSLocalizedString(key, bundle: .main, value: defaultValue, comment: "")
     }
 
+    #if os(macOS)
+    private var macImportLoadingTitle: String {
+        localized("ui.import.loading", defaultValue: "Loading...")
+    }
+
+    @ViewBuilder
+    private func macImportHUDCapsule(text: String) -> some View {
+        Text(text)
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .fixedSize(horizontal: true, vertical: false)
+            .background(Color.black.opacity(0.7), in: Capsule())
+    }
+    #endif
+
     // #region MARK: Clipboard Actions
     private func copyOutputToClipboard() {
         #if os(macOS)
@@ -1469,8 +1623,593 @@ struct TranslationView: View {
     #endif
 
     #if os(iOS)
+    private var iOSImportContentTypes: [UTType] {
+        var types: [UTType] = [.pdf, .image]
+        if let txt = UTType(filenameExtension: "txt") {
+            types.append(txt)
+        }
+        if let doc = UTType(filenameExtension: "doc") {
+            types.append(doc)
+        }
+        if let docx = UTType(filenameExtension: "docx") {
+            types.append(docx)
+        }
+        return types
+    }
+
+    private func handleImportedDocumentResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case let .success(urls):
+            guard let url = urls.first else { return }
+            let isImageImport = isImageExtension(url.pathExtension.lowercased())
+            Task { @MainActor in
+                isImportLoading = true
+                defer { isImportLoading = false }
+
+                guard let text = await loadImportedText(from: url) else {
+                    showImportToast(
+                        localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                        placement: isImageImport ? .sourceFieldCenter : .bottom
+                    )
+                    return
+                }
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    showImportToast(
+                        localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                        placement: isImageImport ? .sourceFieldCenter : .bottom
+                    )
+                    return
+                }
+                viewModel.handleSourceTextPasted(text)
+            }
+        case .failure:
+            break
+        }
+    }
+
+    private func handlePickedPhotoItem(_ item: PhotosPickerItem) async {
+        await MainActor.run {
+            isImportLoading = true
+        }
+        defer {
+            Task { @MainActor in
+                isImportLoading = false
+                selectedPhotoItem = nil
+            }
+        }
+
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        guard let text = await recognizeTextInImageData(data) else {
+            await MainActor.run {
+                showImportToast(
+                    localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                    placement: .sourceFieldCenter
+                )
+            }
+            return
+        }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            await MainActor.run {
+                showImportToast(
+                    localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                    placement: .sourceFieldCenter
+                )
+            }
+            return
+        }
+        await MainActor.run {
+            viewModel.handleSourceTextPasted(trimmed)
+        }
+    }
+
+    private func recognizeTextInImageData(_ data: Data) async -> String? {
+        let recognitionLanguages = await MainActor.run {
+            recognitionLanguageCandidatesForOCR()
+        }
+        if let transcript = await recognizeTextWithImageAnalysisTranscript(data),
+           let normalized = Self.normalizedRecognizedImageImportText(transcript) {
+            return normalized
+        }
+
+        let task = Task.detached(priority: .userInitiated) { () -> String? in
+            guard let image = UIImage(data: data) else { return nil }
+            guard let cgImage = image.cgImage else { return nil }
+
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            if let supportedLanguages = try? request.supportedRecognitionLanguages() {
+                var supportedByNormalizedCode: [String: String] = [:]
+                for language in supportedLanguages {
+                    let normalized = Self.normalizeOCRLanguageCode(language)
+                    if !normalized.isEmpty, supportedByNormalizedCode[normalized] == nil {
+                        supportedByNormalizedCode[normalized] = language
+                    }
+                }
+                let usable: [String] = recognitionLanguages.compactMap { candidate -> String? in
+                    let normalized = Self.normalizeOCRLanguageCode(candidate)
+                    guard !normalized.isEmpty else { return nil }
+                    return supportedByNormalizedCode[normalized]
+                }
+                if !usable.isEmpty {
+                    request.recognitionLanguages = usable
+                }
+            }
+
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            do {
+                try handler.perform([request])
+            } catch {
+                return nil
+            }
+
+            guard let observations = request.results else { return nil }
+            let lines = observations.compactMap { $0.topCandidates(1).first?.string }
+            let joined = lines.joined(separator: "\n")
+            return Self.normalizedRecognizedImageImportText(joined)
+        }
+        return await task.value
+    }
+
+    private func recognizeTextWithImageAnalysisTranscript(_ data: Data) async -> String? {
+        guard #available(iOS 16.0, *) else { return nil }
+        guard let image = UIImage(data: data) else { return nil }
+
+        do {
+            let analyzer = ImageAnalyzer()
+            let configuration = ImageAnalyzer.Configuration([.text])
+            let analysis = try await analyzer.analyze(image, configuration: configuration)
+            return analysis.transcript
+        } catch {
+            return nil
+        }
+    }
+
+    private nonisolated static func normalizedRecognizedImageImportText(_ text: String) -> String? {
+        guard !text.isEmpty else { return nil }
+        let normalized = Self.normalizePDFSoftLineBreaksOnIOS(text)
+        let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func recognitionLanguageCandidatesForOCR() -> [String] {
+        var candidates: [String] = []
+        let preferredLocaleMap = preferredLocaleByLanguageCode()
+
+        if let preferred = Locale.preferredLanguages.first {
+            candidates.append(contentsOf: expandedOCRLanguageCandidates(
+                from: preferred,
+                preferredLocaleMap: preferredLocaleMap
+            ))
+        }
+        if !viewModel.detectedLanguageCode.isEmpty {
+            candidates.append(contentsOf: expandedOCRLanguageCandidates(
+                from: viewModel.detectedLanguageCode,
+                preferredLocaleMap: preferredLocaleMap
+            ))
+        }
+        if !viewModel.targetLanguage.isEmpty {
+            candidates.append(contentsOf: expandedOCRLanguageCandidates(
+                from: viewModel.targetLanguage,
+                preferredLocaleMap: preferredLocaleMap
+            ))
+        }
+
+        var seen: Set<String> = []
+        return candidates.filter { code in
+            guard !code.isEmpty else { return false }
+            if seen.contains(code) { return false }
+            seen.insert(code)
+            return true
+        }
+    }
+
+    private func normalizedOCRLanguageCode(_ code: String) -> String {
+        Self.normalizeOCRLanguageCode(code)
+    }
+
+    private nonisolated static func normalizeOCRLanguageCode(_ code: String) -> String {
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        let hyphenated = trimmed.replacingOccurrences(of: "_", with: "-")
+        guard hyphenated.lowercased() != "und" else { return "" }
+
+        let components = hyphenated.split(separator: "-").map(String.init)
+        guard let first = components.first, !first.isEmpty else { return "" }
+
+        var normalizedComponents: [String] = [first.lowercased()]
+        for component in components.dropFirst() {
+            if component.count == 4 {
+                normalizedComponents.append(component.prefix(1).uppercased() + component.dropFirst().lowercased())
+            } else if component.count == 2 || component.count == 3 {
+                normalizedComponents.append(component.uppercased())
+            } else {
+                normalizedComponents.append(component)
+            }
+        }
+
+        return normalizedComponents.joined(separator: "-")
+    }
+
+    private func expandedOCRLanguageCandidates(
+        from rawCode: String,
+        preferredLocaleMap: [String: String]
+    ) -> [String] {
+        let normalized = normalizedOCRLanguageCode(rawCode)
+        guard !normalized.isEmpty else { return [] }
+
+        let base = String(normalized.split(separator: "-").first ?? "")
+        guard !base.isEmpty else { return [normalized] }
+
+        var expanded: [String] = []
+        if let locale = preferredLocaleMap[base], !locale.isEmpty {
+            expanded.append(locale)
+        }
+        expanded.append(normalized)
+        expanded.append(base)
+        return expanded
+    }
+
+    private func preferredLocaleByLanguageCode() -> [String: String] {
+        var map: [String: String] = [:]
+        for preferred in Locale.preferredLanguages {
+            let normalized = normalizedOCRLanguageCode(preferred)
+            guard !normalized.isEmpty else { continue }
+            let base = String(normalized.split(separator: "-").first ?? "")
+            guard !base.isEmpty else { continue }
+            if map[base] == nil {
+                map[base] = normalized
+            }
+        }
+        return map
+    }
+
+    private func loadImportedText(from fileURL: URL) async -> String? {
+        let hasSecurityScope = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if hasSecurityScope {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+            return nil
+        }
+
+        let lowercasedExtension = fileURL.pathExtension.lowercased()
+
+        if isImageExtension(lowercasedExtension),
+           let data = try? Data(contentsOf: fileURL) {
+            return await recognizeTextInImageData(data)
+        }
+
+        if lowercasedExtension == "pdf",
+           let extracted = extractTextFromPDFOnIOS(fileURL),
+           !extracted.isEmpty {
+            return extracted
+        }
+
+        if ["doc", "docx", "pages"].contains(lowercasedExtension),
+           let extracted = extractTextWithAttributedStringOnIOS(from: fileURL),
+           !extracted.isEmpty {
+            return extracted
+        }
+
+        if let data = try? Data(contentsOf: fileURL) {
+            if let utf8 = String(data: data, encoding: .utf8),
+               !utf8.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return utf8
+            }
+            if let utf16 = String(data: data, encoding: .utf16),
+               !utf16.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return utf16
+            }
+            if let shiftJIS = String(data: data, encoding: .shiftJIS),
+               !shiftJIS.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return shiftJIS
+            }
+        }
+
+        return nil
+    }
+
+    private func isImageExtension(_ fileExtension: String) -> Bool {
+        guard !fileExtension.isEmpty else { return false }
+        guard let type = UTType(filenameExtension: fileExtension) else { return false }
+        return type.conforms(to: .image)
+    }
+
+    private func extractTextFromImageDataOnIOS(_ data: Data) -> String? {
+        guard let image = UIImage(data: data) else { return nil }
+        guard let cgImage = image.cgImage else { return nil }
+
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        if let supportedLanguages = try? request.supportedRecognitionLanguages() {
+            let candidates = recognitionLanguageCandidatesForOCR()
+            var supportedByNormalizedCode: [String: String] = [:]
+            for language in supportedLanguages {
+                let normalized = normalizedOCRLanguageCode(language)
+                if !normalized.isEmpty, supportedByNormalizedCode[normalized] == nil {
+                    supportedByNormalizedCode[normalized] = language
+                }
+            }
+            let usable: [String] = candidates.compactMap { candidate -> String? in
+                let normalized = normalizedOCRLanguageCode(candidate)
+                guard !normalized.isEmpty else { return nil }
+                return supportedByNormalizedCode[normalized]
+            }
+            if !usable.isEmpty {
+                request.recognitionLanguages = usable
+            }
+        }
+
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+        } catch {
+            return nil
+        }
+
+        guard let observations = request.results else { return nil }
+        let lines = observations.compactMap { $0.topCandidates(1).first?.string }
+        let joined = lines.joined(separator: "\n")
+        guard !joined.isEmpty else { return nil }
+        let normalized = Self.normalizePDFSoftLineBreaksOnIOS(joined)
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private func presentFileImporter() {
+        // Present after the menu dismissal animation finishes to avoid
+        // UIKit reparenting warnings when launching pickers from Menu actions.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            isPhotoPickerPresented = false
+            isFileImportPickerPresented = true
+        }
+    }
+
+    private func presentPhotoPicker() {
+        // Present after the menu dismissal animation finishes to avoid
+        // UIKit reparenting warnings when launching pickers from Menu actions.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            isFileImportPickerPresented = false
+            isPhotoPickerPresented = true
+        }
+    }
+
+    private func extractTextWithAttributedStringOnIOS(from fileURL: URL) -> String? {
+        if let attributed = try? NSAttributedString(
+            url: fileURL,
+            options: [:],
+            documentAttributes: nil
+        ) {
+            let text = attributed.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                return text
+            }
+        }
+        return nil
+    }
+
+    private func extractTextFromPDFOnIOS(_ fileURL: URL) -> String? {
+        #if canImport(PDFKit)
+        guard let document = PDFDocument(url: fileURL) else { return nil }
+
+        var pages: [String] = []
+        pages.reserveCapacity(document.pageCount)
+
+        for pageIndex in 0..<document.pageCount {
+            guard let page = document.page(at: pageIndex) else { continue }
+            let text = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                pages.append(Self.normalizePDFSoftLineBreaksOnIOS(text))
+            }
+        }
+
+        let combined = pages.joined(separator: "\n\n")
+        return combined.isEmpty ? nil : combined
+        #else
+        return nil
+        #endif
+    }
+
+    private nonisolated static func normalizePDFSoftLineBreaksOnIOS(_ text: String) -> String {
+        let lines = text.components(separatedBy: .newlines)
+        guard !lines.isEmpty else { return text }
+
+        let headingDataLengthThreshold = Self.shortHeadingDataThresholdOnIOS(for: lines)
+        var resultLines: [String] = []
+        resultLines.reserveCapacity(lines.count)
+        var previousLineForcesBreak = true
+        var verticalWritingMode = false
+
+        for (lineIndex, rawLine) in lines.enumerated() {
+            let trimmedLine = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if trimmedLine.isEmpty {
+                if !resultLines.isEmpty, resultLines.last != "" {
+                    resultLines.append("")
+                }
+                previousLineForcesBreak = true
+                verticalWritingMode = false
+                continue
+            }
+
+            if !verticalWritingMode {
+                let verticalRunCount = Self.consecutiveVerticalCandidateCountOnIOS(from: lineIndex, in: lines)
+                if verticalRunCount >= 3 {
+                    verticalWritingMode = true
+                }
+            }
+
+            let isLineEndMarker = Self.shouldKeepLineBreakOnIOS(afterRawLine: rawLine)
+            let isBulletLine = Self.isBulletLikeLineOnIOS(trimmedLine)
+            let isNumericDataLine = Self.isNumericDataOnlyLineOnIOS(trimmedLine)
+            let isShortHeadingDataLine = Self.isShortHeadingOrDataLineOnIOS(
+                trimmedLine,
+                threshold: headingDataLengthThreshold
+            )
+            let blocksIncomingSoftJoin = isBulletLine || isNumericDataLine
+            let blocksOutgoingSoftJoin = isBulletLine || isNumericDataLine || isShortHeadingDataLine
+
+            if verticalWritingMode {
+                if
+                    var last = resultLines.last,
+                    !last.isEmpty
+                {
+                    last += trimmedLine
+                    resultLines[resultLines.count - 1] = last
+                } else {
+                    resultLines.append(trimmedLine)
+                }
+            } else if
+                !previousLineForcesBreak,
+                !blocksIncomingSoftJoin,
+                var last = resultLines.last,
+                !last.isEmpty
+            {
+                if Self.shouldJoinWithoutSpaceOnIOS(previousLine: last) {
+                    last += trimmedLine
+                } else {
+                    last += " " + trimmedLine
+                }
+                resultLines[resultLines.count - 1] = last
+            } else {
+                resultLines.append(trimmedLine)
+            }
+
+            if isLineEndMarker {
+                verticalWritingMode = false
+            }
+            previousLineForcesBreak = isLineEndMarker || blocksOutgoingSoftJoin
+        }
+
+        return resultLines.joined(separator: "\n")
+    }
+
+    private nonisolated static func shouldKeepLineBreakOnIOS(afterRawLine rawLine: String) -> Bool {
+        guard let trailing = Self.lastNonWhitespaceCharacterOnIOS(in: rawLine) else { return false }
+        return Self.isLineEndMarkerCharacterOnIOS(trailing)
+    }
+
+    private nonisolated static func isLineEndMarkerCharacterOnIOS(_ character: Character) -> Bool {
+        switch character {
+        case ".", "。", "!", "?", "！", "？",
+             ")", "]", "}", "）", "］", "｝", "〉", "》", "」", "』", "】", "〙", "〗":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private nonisolated static func isBulletLikeLineOnIOS(_ trimmedLine: String) -> Bool {
+        let leadingTrimmed = trimmedLine.trimmingCharacters(in: .whitespaces)
+        guard !leadingTrimmed.isEmpty else { return false }
+
+        if let first = leadingTrimmed.first, ["・", "＊", "ー", "-"].contains(first) {
+            return true
+        }
+
+        var index = leadingTrimmed.startIndex
+        var digitCount = 0
+        while index < leadingTrimmed.endIndex, leadingTrimmed[index].isNumber {
+            digitCount += 1
+            index = leadingTrimmed.index(after: index)
+        }
+
+        if digitCount > 0, index < leadingTrimmed.endIndex {
+            let delimiter = leadingTrimmed[index]
+            if delimiter == "." || delimiter == ":" || delimiter == ";" {
+                return true
+            }
+        }
+        return false
+    }
+
+    private nonisolated static func isNumericDataOnlyLineOnIOS(_ trimmedLine: String) -> Bool {
+        guard !trimmedLine.isEmpty else { return false }
+        return trimmedLine.range(of: #"^[0-9/:\s]+$"#, options: .regularExpression) != nil
+    }
+
+    private nonisolated static func shortHeadingDataThresholdOnIOS(for lines: [String]) -> Int {
+        let introMax = lines
+            .prefix(30)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).count }
+            .max() ?? 0
+        return introMax / 2
+    }
+
+    private nonisolated static func isShortHeadingOrDataLineOnIOS(_ trimmedLine: String, threshold: Int) -> Bool {
+        guard threshold > 0 else { return false }
+        return !trimmedLine.isEmpty && trimmedLine.count <= threshold
+    }
+
+    private nonisolated static func consecutiveVerticalCandidateCountOnIOS(from startIndex: Int, in allLines: [String]) -> Int {
+        var index = startIndex
+        var count = 0
+        while index < allLines.count {
+            let trimmed = allLines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            if Self.isSingleCJKVerticalCandidateOnIOS(trimmed) {
+                count += 1
+                index += 1
+            } else {
+                break
+            }
+        }
+        return count
+    }
+
+    private nonisolated static func isSingleCJKVerticalCandidateOnIOS(_ line: String) -> Bool {
+        guard line.count == 1, let first = line.first else { return false }
+        return first.unicodeScalars.allSatisfy(Self.isCJKExcludingHangulOnIOS)
+    }
+
+    private nonisolated static func shouldJoinWithoutSpaceOnIOS(previousLine: String) -> Bool {
+        guard let trailing = Self.lastNonWhitespaceCharacterOnIOS(in: previousLine) else { return false }
+        return trailing.unicodeScalars.allSatisfy(Self.isCJKExcludingHangulOnIOS)
+    }
+
+    private nonisolated static func lastNonWhitespaceCharacterOnIOS(in text: String) -> Character? {
+        text.last(where: { !$0.isWhitespace })
+    }
+
+    private nonisolated static func isCJKExcludingHangulOnIOS(_ scalar: UnicodeScalar) -> Bool {
+        let value = scalar.value
+
+        switch value {
+        case 0x1100...0x11FF, 0x3130...0x318F, 0xA960...0xA97F, 0xAC00...0xD7AF, 0xD7B0...0xD7FF:
+            return false
+        default:
+            break
+        }
+
+        switch value {
+        case 0x2E80...0x2EFF,
+             0x3000...0x303F,
+             0x3040...0x30FF,
+             0x31F0...0x31FF,
+             0x3400...0x4DBF,
+             0x4E00...0x9FFF,
+             0xF900...0xFAFF,
+             0x20000...0x2A6DF,
+             0x2A700...0x2B73F,
+             0x2B740...0x2B81F,
+             0x2B820...0x2CEAF,
+             0x2CEB0...0x2EBEF,
+             0x30000...0x3134F:
+            return true
+        default:
+            return false
+        }
+    }
+
     @ViewBuilder
-    private func importToast(text: String) -> some View {
+    private func importHUDCapsule(text: String) -> some View {
         Text(text)
             .font(.system(size: 14, weight: .semibold, design: .rounded))
             .foregroundStyle(.white)
@@ -1488,14 +2227,20 @@ struct TranslationView: View {
     }
 
     private func showImportToast() {
+        showImportToast(sharedImportToastTitle, placement: .bottom)
+    }
+
+    private func showImportToast(_ message: String, placement: ImportToastPlacement = .bottom) {
         toastDismissTask?.cancel()
-        importToastMessage = sharedImportToastTitle
+        importToastPlacement = placement
+        importToastMessage = message
         toastDismissTask = Task {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     importToastMessage = nil
+                    importToastPlacement = .bottom
                 }
             }
         }
@@ -1507,6 +2252,10 @@ struct TranslationView: View {
 
     private var sharedImportToastTitle: String {
         localized("ui.import.shared_text_imported", defaultValue: "Shared text imported.")
+    }
+
+    private var importLoadingToastTitle: String {
+        localized("ui.import.loading", defaultValue: "Loading...")
     }
 
     private func dismissKeyboard() {
@@ -2130,10 +2879,21 @@ private final class DropAwareTextView: NSTextView {
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        guard let droppedText = SourceDropImport.resolveText(from: sender.draggingPasteboard) else {
+        let pasteboard = sender.draggingPasteboard
+        let urls = (pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]) ?? []
+        let strings = (pasteboard.readObjects(forClasses: [NSString.self], options: nil) as? [String]) ?? []
+        guard !urls.isEmpty || !strings.isEmpty else {
             return false
         }
-        onDropResolvedText?(droppedText)
+
+        Task { [weak self] in
+            guard let droppedText = await SourceDropImport.resolveText(urls: urls, strings: strings) else {
+                return
+            }
+            await MainActor.run {
+                self?.onDropResolvedText?(droppedText)
+            }
+        }
         return true
     }
 
@@ -2184,34 +2944,60 @@ private final class DropAwareTextView: NSTextView {
 }
 
 enum SourceDropImport {
-    static func resolveText(from pasteboard: NSPasteboard) -> String? {
-        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
-            for url in urls {
-                if let text = loadText(from: url), !text.isEmpty {
-                    return text
-                }
+    static func resolveText(urls: [URL], strings: [String]) async -> String? {
+        await postImportLoading(true)
+        defer {
+            Task { @MainActor in
+                NotificationCenter.default.post(
+                    name: .pblImportHUDLoadingChanged,
+                    object: nil,
+                    userInfo: [ImportHUDNotificationKeys.loading: false]
+                )
             }
         }
 
-        if let strings = pasteboard.readObjects(forClasses: [NSString.self], options: nil) as? [String] {
-            for value in strings {
-                if let fileURL = fileURL(fromDroppedText: value),
-                   let text = loadText(from: fileURL),
-                   !text.isEmpty {
-                    return text
-                }
-            }
-            for value in strings {
-                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty {
-                    return value
-                }
+        for url in urls {
+            if let text = await loadTextCore(from: url), !text.isEmpty {
+                return text
             }
         }
+
+        for value in strings {
+            if let fileURL = fileURL(fromDroppedText: value),
+               let text = await loadTextCore(from: fileURL),
+               !text.isEmpty {
+                return text
+            }
+        }
+        for value in strings {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                return value
+            }
+        }
+        await postImportFailureMessage()
         return nil
     }
 
-    static func loadText(from fileURL: URL) -> String? {
+    static func loadText(from fileURL: URL) async -> String? {
+        await postImportLoading(true)
+        defer {
+            Task { @MainActor in
+                NotificationCenter.default.post(
+                    name: .pblImportHUDLoadingChanged,
+                    object: nil,
+                    userInfo: [ImportHUDNotificationKeys.loading: false]
+                )
+            }
+        }
+        let loaded = await loadTextCore(from: fileURL)
+        if loaded == nil {
+            await postImportFailureMessage()
+        }
+        return loaded
+    }
+
+    private static func loadTextCore(from fileURL: URL) async -> String? {
         let hasSecurityScope = fileURL.startAccessingSecurityScopedResource()
         defer {
             if hasSecurityScope {
@@ -2224,6 +3010,16 @@ enum SourceDropImport {
             return nil
         }
 
+        let lowercasedExtension = fileURL.pathExtension.lowercased()
+        if isImageFileExtension(lowercasedExtension) {
+            if let transcript = await extractTextFromImageWithImageAnalysis(fileURL), !transcript.isEmpty {
+                return transcript
+            }
+            if let recognized = extractTextFromImageWithVision(fileURL), !recognized.isEmpty {
+                return recognized
+            }
+        }
+
         var encoding: UInt = 0
         if let text = try? NSString(contentsOf: fileURL, usedEncoding: &encoding) {
             let resolved = (text as String).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2231,8 +3027,6 @@ enum SourceDropImport {
                 return text as String
             }
         }
-
-        let lowercasedExtension = fileURL.pathExtension.lowercased()
 
         if lowercasedExtension == "pdf", let extracted = extractTextFromPDF(fileURL), !extracted.isEmpty {
             return extracted
@@ -2249,6 +3043,132 @@ enum SourceDropImport {
         }
 
         return nil
+    }
+
+    private static func postImportLoading(_ isLoading: Bool) async {
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: .pblImportHUDLoadingChanged,
+                object: nil,
+                userInfo: [ImportHUDNotificationKeys.loading: isLoading]
+            )
+        }
+    }
+
+    private static func postImportFailureMessage() async {
+        let message = NSLocalizedString(
+            "menu.file.import.failed.message",
+            bundle: .main,
+            value: "This file does not contain supported text content.",
+            comment: ""
+        )
+        await MainActor.run {
+            NotificationCenter.default.post(
+                name: .pblImportHUDMessage,
+                object: nil,
+                userInfo: [ImportHUDNotificationKeys.message: message]
+            )
+        }
+    }
+
+    private static func isImageFileExtension(_ fileExtension: String) -> Bool {
+        guard !fileExtension.isEmpty else { return false }
+        #if canImport(UniformTypeIdentifiers)
+        if let type = UTType(filenameExtension: fileExtension), type.conforms(to: .image) {
+            return true
+        }
+        #endif
+        return false
+    }
+
+    private static func extractTextFromImageWithImageAnalysis(_ fileURL: URL) async -> String? {
+        #if canImport(VisionKit)
+        guard #available(macOS 13.0, *) else { return nil }
+        do {
+            let analyzer = ImageAnalyzer()
+            var configuration = ImageAnalyzer.Configuration([.text])
+            let supportedLocales = ImageAnalyzer.supportedTextRecognitionLanguages
+            let orderedLocales = orderedTextRecognitionLocalesForOCR(supported: supportedLocales)
+            if orderedLocales.count > 1 {
+                configuration.locales = orderedLocales
+            }
+            let analysis = try await analyzer.analyze(
+                imageAt: fileURL,
+                orientation: .up,
+                configuration: configuration
+            )
+            let transcript = analysis.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            return transcript.isEmpty ? nil : transcript
+        } catch {
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    private static func extractTextFromImageWithVision(_ fileURL: URL) -> String? {
+        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else {
+            return nil
+        }
+
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.automaticallyDetectsLanguage = true
+        request.usesLanguageCorrection = true
+        if let supportedLanguages = try? request.supportedRecognitionLanguages() {
+            let orderedLanguages = orderedTextRecognitionLocalesForOCR(supported: supportedLanguages)
+            // Restrict only when we have meaningful multilingual hints.
+            if orderedLanguages.count > 1 {
+                request.recognitionLanguages = orderedLanguages
+            }
+        }
+
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+        } catch {
+            return nil
+        }
+
+        guard let observations = request.results else { return nil }
+        let lines = observations.compactMap { $0.topCandidates(1).first?.string }
+        let joined = lines.joined(separator: "\n")
+        let trimmed = joined.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func orderedTextRecognitionLocalesForOCR(supported: [String]) -> [String] {
+        let candidates = recognitionLanguageCandidatesForOCR()
+        var supportedByNormalizedCode: [String: String] = [:]
+        for language in supported {
+            let normalized = normalizeOCRLanguageCode(language)
+            if !normalized.isEmpty, supportedByNormalizedCode[normalized] == nil {
+                supportedByNormalizedCode[normalized] = language
+            }
+        }
+
+        let prioritized: [String] = candidates.compactMap { candidate -> String? in
+            let normalized = normalizeOCRLanguageCode(candidate)
+            guard !normalized.isEmpty else { return nil }
+            return supportedByNormalizedCode[normalized]
+        }
+
+        var seenNormalized: Set<String> = []
+        for language in prioritized {
+            let normalized = normalizeOCRLanguageCode(language)
+            if !normalized.isEmpty {
+                seenNormalized.insert(normalized)
+            }
+        }
+        let remaining = supported.filter { language in
+            let normalized = normalizeOCRLanguageCode(language)
+            guard !normalized.isEmpty else { return false }
+            return !seenNormalized.contains(normalized)
+        }
+        return prioritized + remaining
     }
 
     private static func extractTextWithAttributedString(from fileURL: URL) -> String? {
@@ -2373,6 +3293,82 @@ enum SourceDropImport {
         }
 
         return resultLines.joined(separator: "\n")
+    }
+
+    private static func recognitionLanguageCandidatesForOCR() -> [String] {
+        var candidates: [String] = []
+        let preferredLocaleMap = preferredLocaleByLanguageCode()
+
+        for preferred in Locale.preferredLanguages {
+            candidates.append(contentsOf: expandedOCRLanguageCandidates(
+                from: preferred,
+                preferredLocaleMap: preferredLocaleMap
+            ))
+        }
+
+        var seen: Set<String> = []
+        return candidates.filter { code in
+            guard !code.isEmpty else { return false }
+            if seen.contains(code) { return false }
+            seen.insert(code)
+            return true
+        }
+    }
+
+    private static func normalizeOCRLanguageCode(_ code: String) -> String {
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+
+        let hyphenated = trimmed.replacingOccurrences(of: "_", with: "-")
+        guard hyphenated.lowercased() != "und" else { return "" }
+
+        let components = hyphenated.split(separator: "-").map(String.init)
+        guard let first = components.first, !first.isEmpty else { return "" }
+
+        var normalizedComponents: [String] = [first.lowercased()]
+        for component in components.dropFirst() {
+            if component.count == 4 {
+                normalizedComponents.append(component.prefix(1).uppercased() + component.dropFirst().lowercased())
+            } else if component.count == 2 || component.count == 3 {
+                normalizedComponents.append(component.uppercased())
+            } else {
+                normalizedComponents.append(component)
+            }
+        }
+        return normalizedComponents.joined(separator: "-")
+    }
+
+    private static func expandedOCRLanguageCandidates(
+        from rawCode: String,
+        preferredLocaleMap: [String: String]
+    ) -> [String] {
+        let normalized = normalizeOCRLanguageCode(rawCode)
+        guard !normalized.isEmpty else { return [] }
+
+        let base = String(normalized.split(separator: "-").first ?? "")
+        guard !base.isEmpty else { return [normalized] }
+
+        var expanded: [String] = []
+        if let locale = preferredLocaleMap[base], !locale.isEmpty {
+            expanded.append(locale)
+        }
+        expanded.append(normalized)
+        expanded.append(base)
+        return expanded
+    }
+
+    private static func preferredLocaleByLanguageCode() -> [String: String] {
+        var map: [String: String] = [:]
+        for preferred in Locale.preferredLanguages {
+            let normalized = normalizeOCRLanguageCode(preferred)
+            guard !normalized.isEmpty else { continue }
+            let base = String(normalized.split(separator: "-").first ?? "")
+            guard !base.isEmpty else { continue }
+            if map[base] == nil {
+                map[base] = normalized
+            }
+        }
+        return map
     }
 
     private static func shouldKeepLineBreak(afterRawLine rawLine: String) -> Bool {
@@ -2540,6 +3536,16 @@ enum SourceDropImport {
 }
 
 #endif
+
+enum ImportHUDNotificationKeys {
+    static let loading = "isLoading"
+    static let message = "message"
+}
+
+extension Notification.Name {
+    static let pblImportHUDLoadingChanged = Notification.Name("pbl.importHUD.loadingChanged")
+    static let pblImportHUDMessage = Notification.Name("pbl.importHUD.message")
+}
 
 private extension View {
     @ViewBuilder
