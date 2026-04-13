@@ -14,6 +14,9 @@
 - iOS Share Panel の文書取り込みを改善
   - `.pdf` / `.docx` からのテキスト抽出に対応
   - PDF 取り込み時にソフト改行正規化を適用
+- macOS / iOS の新機能: Vision Framework を利用した画像OCRに対応
+  - 画像からテキストを抽出して Source へ取り込み可能
+  - OCR結果をそのまま翻訳フローに連携
 
 ## 0.6.3 (Unreleased)
 

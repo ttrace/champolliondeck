@@ -2234,10 +2234,48 @@ struct TranslationView: View {
     }
 
     private func handleSharedImportIfNeeded() {
-        guard viewModel.importSharedTextIfNeeded() != nil else { return }
-        showImportToast()
-        guard autoTranslateImportedTextEnabled else { return }
-        Task { await viewModel.translate() }
+        #if os(iOS)
+        guard let pending = SharedImportStore.consumePendingImport() else { return }
+
+        Task { @MainActor in
+            switch pending {
+            case let .text(text):
+                let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalized.isEmpty else { return }
+                viewModel.handleSourceTextPasted(normalized)
+                showImportToast()
+                if autoTranslateImportedTextEnabled {
+                    await viewModel.translate()
+                }
+
+            case let .imageFile(fileURL):
+                isImportLoading = true
+                defer { isImportLoading = false }
+
+                guard let text = await loadImportedText(from: fileURL) else {
+                    showImportToast(
+                        localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                        placement: .sourceFieldCenter
+                    )
+                    return
+                }
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    showImportToast(
+                        localized("ui.import.ocr_failed", defaultValue: "Could not read text."),
+                        placement: .sourceFieldCenter
+                    )
+                    return
+                }
+
+                viewModel.handleSourceTextPasted(trimmed)
+                showImportToast(sharedImportToastTitle)
+                if autoTranslateImportedTextEnabled {
+                    await viewModel.translate()
+                }
+            }
+        }
+        #endif
     }
 
     private func showImportToast() {

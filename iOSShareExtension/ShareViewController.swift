@@ -5,6 +5,11 @@ import PDFKit
 #endif
 
 final class ShareViewController: UIViewController {
+    private struct PendingImageReservation {
+        let data: Data
+        let fileExtension: String?
+    }
+
     private let cardView = UIView()
     private let previewTextView = UITextView()
     private let reserveButton = UIButton(type: .system)
@@ -12,6 +17,7 @@ final class ShareViewController: UIViewController {
     private let buttonStack = UIStackView()
     private let contentStack = UIStackView()
     private var sharedText: String = ""
+    private var pendingImageReservation: PendingImageReservation?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -45,6 +51,17 @@ final class ShareViewController: UIViewController {
         for item in extensionItems {
             guard let attachments = item.attachments else { continue }
             for provider in attachments {
+                if pendingImageReservation == nil,
+                   provider.hasItemConformingToTypeIdentifier(UTType.image.identifier),
+                   let reservation = await loadImageReservation(
+                       provider: provider,
+                       typeIdentifier: UTType.image.identifier
+                   )
+                {
+                    pendingImageReservation = reservation
+                    continue
+                }
+
                 if let text = await loadText(from: provider) {
                     fragments.append(text)
                 }
@@ -77,6 +94,18 @@ final class ShareViewController: UIViewController {
         }
 
         return nil
+    }
+
+    private func loadImageReservation(provider: NSItemProvider, typeIdentifier: String) async -> PendingImageReservation? {
+        await withCheckedContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: typeIdentifier, options: nil) { item, _ in
+                guard let reservation = Self.pendingImageReservation(fromSharedItem: item) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: reservation)
+            }
+        }
     }
 
     private func loadStringValue(provider: NSItemProvider, typeIdentifier: String) async -> String? {
@@ -163,6 +192,49 @@ final class ShareViewController: UIViewController {
             }
         }
         return nil
+    }
+
+    nonisolated private static func pendingImageReservation(fromSharedItem item: NSSecureCoding?) -> PendingImageReservation? {
+        if let url = item as? URL {
+            return loadImageReservation(at: url)
+        }
+
+        if let nsURL = item as? NSURL, let url = nsURL as URL? {
+            return loadImageReservation(at: url)
+        }
+
+        if let data = item as? Data, !data.isEmpty {
+            return PendingImageReservation(data: data, fileExtension: "jpg")
+        }
+
+        if let nsData = item as? NSData {
+            let data = nsData as Data
+            if !data.isEmpty {
+                return PendingImageReservation(data: data, fileExtension: "jpg")
+            }
+        }
+
+        if let image = item as? UIImage {
+            if let pngData = image.pngData(), !pngData.isEmpty {
+                return PendingImageReservation(data: pngData, fileExtension: "png")
+            }
+            if let jpegData = image.jpegData(compressionQuality: 0.95), !jpegData.isEmpty {
+                return PendingImageReservation(data: jpegData, fileExtension: "jpg")
+            }
+        }
+
+        return nil
+    }
+
+    nonisolated private static func loadImageReservation(at url: URL) -> PendingImageReservation? {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessing { url.stopAccessingSecurityScopedResource() }
+        }
+
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
+        let ext = url.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
+        return PendingImageReservation(data: data, fileExtension: ext.isEmpty ? nil : ext.lowercased())
     }
 
     nonisolated private static func extractTextFromPDF(_ fileURL: URL) -> String? {
@@ -378,15 +450,15 @@ final class ShareViewController: UIViewController {
     }
 
     @MainActor
-    private func openHostApp(with text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        let capped = String(trimmed.prefix(1500))
-        guard let primaryURL = makeImportURL(text: capped) else { return }
-
-        let openedPrimary = await requestOpen(primaryURL)
-        if openedPrimary { return }
+    private func openHostApp(withText text: String?) async {
+        let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            let capped = String(trimmed.prefix(1500))
+            if let primaryURL = makeImportURL(text: capped) {
+                let openedPrimary = await requestOpen(primaryURL)
+                if openedPrimary { return }
+            }
+        }
 
         guard let fallbackURL = URL(string: "prebabellens://import-shared") else { return }
         _ = await requestOpen(fallbackURL)
@@ -445,18 +517,36 @@ final class ShareViewController: UIViewController {
     private func loadSharedText() async {
         let text = await composeSharedText()
         sharedText = text
-        previewTextView.text = text.isEmpty ? localizedNoTextMessage : text
-        reserveButton.isEnabled = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasText {
+            previewTextView.text = text
+        } else if pendingImageReservation != nil {
+            previewTextView.text = localizedImageReservedMessage
+        } else {
+            previewTextView.text = localizedNoTextMessage
+        }
+        reserveButton.isEnabled = hasText || pendingImageReservation != nil
     }
 
     @objc
     private func didTapReserve() {
         Task { @MainActor in
             let trimmed = sharedText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return }
+            let hasText = !trimmed.isEmpty
+            let hasImage = pendingImageReservation != nil
+            guard hasText || hasImage else { return }
             reserveButton.isEnabled = false
-            SharedImportStore.savePendingText(trimmed)
-            await openHostApp(with: trimmed)
+
+            if hasText {
+                SharedImportStore.savePendingText(trimmed)
+            } else if let image = pendingImageReservation {
+                _ = SharedImportStore.savePendingImageData(
+                    image.data,
+                    fileExtension: image.fileExtension
+                )
+            }
+
+            await openHostApp(withText: hasText ? trimmed : nil)
             presentReservationCompletedAlert()
         }
     }
@@ -541,6 +631,12 @@ final class ShareViewController: UIViewController {
 
     private var localizedNoTextMessage: String {
         isJapaneseLocale ? "共有可能なテキストが見つかりませんでした。" : "No shareable text was found."
+    }
+
+    private var localizedImageReservedMessage: String {
+        isJapaneseLocale
+            ? "画像を予約しました。Pre-Babel Lens起動時にOCRを実行します。"
+            : "Image reserved. OCR will run when Pre-Babel Lens launches."
     }
 
     private var localizedCancelLabel: String {
