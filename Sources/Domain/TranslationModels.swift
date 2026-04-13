@@ -40,6 +40,7 @@ struct TranslationRequest: Equatable {
     var text: String
     var glossary: [GlossaryEntry]
     var experimentMode: TranslationExperimentMode = .segmentedGlossaryProtected
+    var usesAITranslation: Bool = false
 }
 
 struct GlossaryEntry: Hashable, Equatable {

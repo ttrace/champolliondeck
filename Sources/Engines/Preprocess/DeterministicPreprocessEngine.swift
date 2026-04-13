@@ -22,7 +22,10 @@ struct DeterministicPreprocessEngine: PreprocessEngine {
         )
 
         let segmentation = request.experimentMode.usesSegmentation
-            ? SentenceSegmenter.segment(request.text)
+            ? SentenceSegmenter.segment(
+                request.text,
+                usesAITranslation: request.usesAITranslation
+            )
             : RawInputSegmenter.segment(request.text)
         traces.append(
             PreprocessTrace(step: "sentence-segmentation", summary: "segments=\(segmentation.segments.count)")
@@ -161,17 +164,25 @@ enum RawInputSegmenter {
 }
 
 enum SentenceSegmenter {
-    static func segment(_ text: String) -> SegmentationResult {
+    static func segment(_ text: String, usesAITranslation: Bool) -> SegmentationResult {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return SegmentationResult(segments: [], joinersAfter: [])
         }
+        let limits = segmentationLimits(usesAITranslation: usesAITranslation)
         let units = sentenceUnits(from: text)
         return groupedSegments(
             from: units,
-            maxCharacters: 250,
-            maxWords: 100
+            maxCharacters: limits.maxCharacters,
+            maxWords: limits.maxWords
         )
+    }
+
+    private static func segmentationLimits(usesAITranslation: Bool) -> (maxCharacters: Int, maxWords: Int) {
+        if usesAITranslation {
+            return (maxCharacters: 280, maxWords: 120)
+        }
+        return (maxCharacters: 140, maxWords: 90)
     }
 
     private static func sentenceUnits(from text: String) -> [SentenceUnit] {

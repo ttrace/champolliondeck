@@ -422,7 +422,8 @@ final class TranslationViewModel: ObservableObject {
             targetLanguage: targetLanguage,
             text: normalizedInput,
             glossary: parseGlossary(glossaryText),
-            experimentMode: experimentMode
+            experimentMode: experimentMode,
+            usesAITranslation: usesAppleIntelligenceTranslation
         )
 
         guard !request.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
