@@ -6,7 +6,7 @@
 "menu.translate.switch_to_standard" = "Switch to Standard Translation";
 "menu.translate.ai_unavailable" = "AI translation unavailable on this device";
 "view.menu.compact" = "Compact";
-"view.menu.column" = "Column Layout";
+"view.menu.column" = "Column";
 "view.menu.size.actual" = "Actual Size";
 "view.menu.size.zoom_in" = "Zoom In";
 "view.menu.size.zoom_out" = "Zoom Out";

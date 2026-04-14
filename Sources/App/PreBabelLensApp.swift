@@ -342,6 +342,7 @@ private struct TranslationMenuCommands: Commands {
 
 private struct ViewMenuCommands: Commands {
     @AppStorage("editorFontScaleLevel") private var editorFontScaleLevel: Int = 2
+    @AppStorage("viewMenuCompactModeEnabled") private var viewMenuCompactModeEnabled: Bool = false
 
     var body: some Commands {
         CommandGroup(before: .toolbar) {
@@ -387,9 +388,12 @@ private struct ViewMenuCommands: Commands {
 
     @MainActor
     private func toggleCompactColumnMode() {
-        if isCompactModeActive {
+        let compactNow = isCompactModeActiveAtActionTime
+        if compactNow {
+            viewMenuCompactModeEnabled = false
             applyWindowWidth(columnModeWidth)
         } else {
+            viewMenuCompactModeEnabled = true
             let compactWidth = activeWindow?.minSize.width ?? defaultCompactModeWidth
             applyWindowWidth(compactWidth)
         }
@@ -406,11 +410,17 @@ private struct ViewMenuCommands: Commands {
 
     @MainActor
     private var isCompactModeActive: Bool {
+        // Keep menu title consistent with the most recent user toggle.
+        return viewMenuCompactModeEnabled
+    }
+
+    @MainActor
+    private var isCompactModeActiveAtActionTime: Bool {
         let currentWidth = NSApp.keyWindow?.frame.width
             ?? NSApp.mainWindow?.frame.width
             ?? NSApp.windows.first(where: { $0.isVisible })?.frame.width
             ?? NSApp.windows.first?.frame.width
-            ?? columnModeWidth
+            ?? (viewMenuCompactModeEnabled ? defaultCompactModeWidth : columnModeWidth)
         return currentWidth <= compactThresholdWidth
     }
 
@@ -424,7 +434,7 @@ private struct ViewMenuCommands: Commands {
     }
 
     private var columnModeTitle: String {
-        localized("view.menu.column", defaultValue: "Column Layout")
+        localized("view.menu.column", defaultValue: "Column")
     }
 
     private var increaseTextSizeTitle: String {
