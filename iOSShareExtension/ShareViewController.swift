@@ -289,6 +289,10 @@ final class ShareViewController: UIViewController {
             }
 
             let isLineEndMarker = shouldKeepLineBreak(afterRawLine: rawLine)
+            let nextTrimmedLine = lineIndex + 1 < lines.count
+                ? lines[lineIndex + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+                : ""
+            let shouldOverrideLineEndBreakForQuoteOnlyNextLine = isLineEndMarker && isQuotationOnlyLine(nextTrimmedLine)
             let isBulletLine = isBulletLikeLine(trimmedLine)
             let isNumericDataLine = isNumericDataOnlyLine(trimmedLine)
             let isShortHeadingDataLine = isShortHeadingOrDataLine(
@@ -314,7 +318,7 @@ final class ShareViewController: UIViewController {
                 var last = resultLines.last,
                 !last.isEmpty
             {
-                if shouldJoinWithoutSpace(previousLine: last) {
+                if isQuotationOnlyLine(trimmedLine) || shouldJoinWithoutSpace(previousLine: last) {
                     last += trimmedLine
                 } else {
                     last += " " + trimmedLine
@@ -327,15 +331,30 @@ final class ShareViewController: UIViewController {
             if isLineEndMarker {
                 verticalWritingMode = false
             }
-            previousLineForcesBreak = isLineEndMarker || blocksOutgoingSoftJoin
+            previousLineForcesBreak = shouldOverrideLineEndBreakForQuoteOnlyNextLine
+                ? false
+                : (isLineEndMarker || blocksOutgoingSoftJoin)
         }
 
         return resultLines.joined(separator: "\n")
     }
 
     nonisolated private static func shouldKeepLineBreak(afterRawLine rawLine: String) -> Bool {
-        guard let trailing = lastNonWhitespaceCharacter(in: rawLine) else { return false }
-        return isLineEndMarkerCharacter(trailing)
+        let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        let characters = Array(trimmed)
+        guard let trailing = characters.last else { return false }
+        if isLineEndMarkerCharacter(trailing) {
+            return true
+        }
+
+        var index = characters.count - 1
+        while index >= 0, isTrailingQuotationCharacter(characters[index]) {
+            index -= 1
+        }
+        guard index >= 0 else { return false }
+        return isLineEndMarkerCharacter(characters[index])
     }
 
     nonisolated private static func isLineEndMarkerCharacter(_ character: Character) -> Bool {
@@ -346,6 +365,20 @@ final class ShareViewController: UIViewController {
         default:
             return false
         }
+    }
+
+    nonisolated private static func isTrailingQuotationCharacter(_ character: Character) -> Bool {
+        switch character {
+        case "\"", "'", "”", "“", "’", "‘", "»", "«", "›", "‹":
+            return true
+        default:
+            return false
+        }
+    }
+
+    nonisolated private static func isQuotationOnlyLine(_ line: String) -> Bool {
+        guard !line.isEmpty else { return false }
+        return line.allSatisfy(isTrailingQuotationCharacter)
     }
 
     nonisolated private static func isBulletLikeLine(_ trimmedLine: String) -> Bool {

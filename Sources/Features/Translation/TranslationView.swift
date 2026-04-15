@@ -2183,6 +2183,11 @@ struct TranslationView: View {
             }
 
             let isLineEndMarker = Self.shouldKeepLineBreakOnIOS(afterRawLine: rawLine)
+            let nextTrimmedLine = lineIndex + 1 < lines.count
+                ? lines[lineIndex + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+                : ""
+            let shouldOverrideLineEndBreakForQuoteOnlyNextLine =
+                isLineEndMarker && Self.isQuotationOnlyLineOnIOS(nextTrimmedLine)
             let isBulletLine = Self.isBulletLikeLineOnIOS(trimmedLine)
             let isNumericDataLine = Self.isNumericDataOnlyLineOnIOS(trimmedLine)
             let isShortHeadingDataLine = Self.isShortHeadingOrDataLineOnIOS(
@@ -2208,7 +2213,7 @@ struct TranslationView: View {
                 var last = resultLines.last,
                 !last.isEmpty
             {
-                if Self.shouldJoinWithoutSpaceOnIOS(previousLine: last) {
+                if Self.isQuotationOnlyLineOnIOS(trimmedLine) || Self.shouldJoinWithoutSpaceOnIOS(previousLine: last) {
                     last += trimmedLine
                 } else {
                     last += " " + trimmedLine
@@ -2221,15 +2226,30 @@ struct TranslationView: View {
             if isLineEndMarker {
                 verticalWritingMode = false
             }
-            previousLineForcesBreak = isLineEndMarker || blocksOutgoingSoftJoin
+            previousLineForcesBreak = shouldOverrideLineEndBreakForQuoteOnlyNextLine
+                ? false
+                : (isLineEndMarker || blocksOutgoingSoftJoin)
         }
 
         return resultLines.joined(separator: "\n")
     }
 
     private nonisolated static func shouldKeepLineBreakOnIOS(afterRawLine rawLine: String) -> Bool {
-        guard let trailing = Self.lastNonWhitespaceCharacterOnIOS(in: rawLine) else { return false }
-        return Self.isLineEndMarkerCharacterOnIOS(trailing)
+        let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        let characters = Array(trimmed)
+        guard let trailing = characters.last else { return false }
+        if Self.isLineEndMarkerCharacterOnIOS(trailing) {
+            return true
+        }
+
+        var index = characters.count - 1
+        while index >= 0, Self.isTrailingQuotationCharacterOnIOS(characters[index]) {
+            index -= 1
+        }
+        guard index >= 0 else { return false }
+        return Self.isLineEndMarkerCharacterOnIOS(characters[index])
     }
 
     private nonisolated static func isLineEndMarkerCharacterOnIOS(_ character: Character) -> Bool {
@@ -2240,6 +2260,20 @@ struct TranslationView: View {
         default:
             return false
         }
+    }
+
+    private nonisolated static func isTrailingQuotationCharacterOnIOS(_ character: Character) -> Bool {
+        switch character {
+        case "\"", "'", "”", "“", "’", "‘", "»", "«", "›", "‹":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private nonisolated static func isQuotationOnlyLineOnIOS(_ line: String) -> Bool {
+        guard !line.isEmpty else { return false }
+        return line.allSatisfy(Self.isTrailingQuotationCharacterOnIOS)
     }
 
     private nonisolated static func isBulletLikeLineOnIOS(_ trimmedLine: String) -> Bool {
@@ -3450,6 +3484,11 @@ enum SourceDropImport {
             }
 
             let isLineEndMarker = shouldKeepLineBreak(afterRawLine: rawLine)
+            let nextTrimmedLine = lineIndex + 1 < lines.count
+                ? lines[lineIndex + 1].trimmingCharacters(in: .whitespacesAndNewlines)
+                : ""
+            let shouldOverrideLineEndBreakForQuoteOnlyNextLine =
+                isLineEndMarker && isQuotationOnlyLine(nextTrimmedLine)
             let isBulletLine = isBulletLikeLine(trimmedLine)
             let isNumericDataLine = isNumericDataOnlyLine(trimmedLine)
             let isShortHeadingDataLine = isShortHeadingOrDataLine(
@@ -3475,7 +3514,7 @@ enum SourceDropImport {
                 var last = resultLines.last,
                 !last.isEmpty
             {
-                if shouldJoinWithoutSpace(previousLine: last) {
+                if isQuotationOnlyLine(trimmedLine) || shouldJoinWithoutSpace(previousLine: last) {
                     last += trimmedLine
                 } else {
                     last += " " + trimmedLine
@@ -3488,7 +3527,9 @@ enum SourceDropImport {
             if isLineEndMarker {
                 verticalWritingMode = false
             }
-            previousLineForcesBreak = isLineEndMarker || blocksOutgoingSoftJoin
+            previousLineForcesBreak = shouldOverrideLineEndBreakForQuoteOnlyNextLine
+                ? false
+                : (isLineEndMarker || blocksOutgoingSoftJoin)
         }
 
         return resultLines.joined(separator: "\n")
@@ -3571,8 +3612,21 @@ enum SourceDropImport {
     }
 
     private static func shouldKeepLineBreak(afterRawLine rawLine: String) -> Bool {
-        guard let trailing = lastNonWhitespaceCharacter(in: rawLine) else { return false }
-        return isLineEndMarkerCharacter(trailing)
+        let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+
+        let characters = Array(trimmed)
+        guard let trailing = characters.last else { return false }
+        if isLineEndMarkerCharacter(trailing) {
+            return true
+        }
+
+        var index = characters.count - 1
+        while index >= 0, isTrailingQuotationCharacter(characters[index]) {
+            index -= 1
+        }
+        guard index >= 0 else { return false }
+        return isLineEndMarkerCharacter(characters[index])
     }
 
     private static func isLineEndMarkerCharacter(_ character: Character) -> Bool {
@@ -3583,6 +3637,20 @@ enum SourceDropImport {
         default:
             return false
         }
+    }
+
+    private static func isTrailingQuotationCharacter(_ character: Character) -> Bool {
+        switch character {
+        case "\"", "'", "”", "“", "’", "‘", "»", "«", "›", "‹":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isQuotationOnlyLine(_ line: String) -> Bool {
+        guard !line.isEmpty else { return false }
+        return line.allSatisfy(isTrailingQuotationCharacter)
     }
 
     private static func isBulletLikeLine(_ trimmedLine: String) -> Bool {
