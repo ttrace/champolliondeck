@@ -6,7 +6,7 @@ In version 0.8.1, the app name changed from Pre-Babel Lens to zen-Babel (Japanes
 
 Repository: https://github.com/ttrace/pre-babel-lens
 
-![zen-Babel Screenshot](docs/images/screenshot.png)
+![zen-Babel Screenshot](docs/images/mac-main-window.png)
 
 ## Current Direction
 
