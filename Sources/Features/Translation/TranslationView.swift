@@ -138,7 +138,7 @@ struct TranslationView: View {
                         Color(red: 0.16, green: 0.19, blue: 0.22),
                     ]
                     : [
-                        Color(red: 0.98, green: 0.92, blue: 0.82).opacity(0.98),
+                        Color(red: 0.90, green: 0.90, blue: 0.91).opacity(0.98),
                         Color(red: 0.93, green: 0.90, blue: 0.88).opacity(0.98),
                     ],
                 startPoint: .topLeading,
@@ -782,21 +782,33 @@ struct TranslationView: View {
                 }
             }
 
-            ZStack(alignment: .topTrailing) {
-                sourceEditor
-                #if os(iOS)
-                if isUnifiedStackedFieldLayout {
-                    sourceOverlayButtonGroup
-                        .padding(.top, 10)
-                        .padding(.trailing, 10)
-                }
-                #endif
-            }
+            sourceEditor
         }
         .padding(cardOuterPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         #if os(iOS)
-        .background(Color.clear)
+        .background {
+            if isUnifiedStackedFieldLayout {
+                sourceFieldWrapperShape.fill(iOSFieldBackgroundColor)
+            } else {
+                Color.clear
+            }
+        }
+        .overlay {
+            if isUnifiedStackedFieldLayout {
+                sourceFieldWrapperShape
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            #if os(iOS)
+            if isUnifiedStackedFieldLayout {
+                sourceOverlayButtonGroup
+                    .padding(.bottom, 0)
+                    .zIndex(3)
+            }
+            #endif
+        }
         .overlay {
             if isImportLoading {
                 importHUDCapsule(text: importLoadingToastTitle)
@@ -856,12 +868,29 @@ struct TranslationView: View {
             .simultaneousGesture(editorPinchGesture(host: .source), including: .gesture)
             .padding(layoutTokens.editorInnerPadding)
             .font(.system(size: editorFontPointSize))
-            .background(sourceEditorBackgroundShape.fill(iOSFieldBackgroundColor))
-            .overlay(sourceEditorBackgroundShape.stroke(Color.primary.opacity(0.10), lineWidth: 1))
+            .background {
+                if isUnifiedStackedFieldLayout {
+                    Color.clear
+                } else {
+                    RoundedRectangle(cornerRadius: editorCornerRadius)
+                        .fill(iOSFieldBackgroundColor)
+                }
+            }
+            .overlay {
+                if !isUnifiedStackedFieldLayout {
+                    RoundedRectangle(cornerRadius: editorCornerRadius)
+                        .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                }
+            }
             .overlay(alignment: .topLeading) {
                 if isUnifiedStackedFieldLayout,
                    viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("翻訳したい文章を入力してください")
+                    Text(
+                        localized(
+                            "ui.placeholder.source_input",
+                            defaultValue: "Enter text to translate."
+                        )
+                    )
                         .font(.system(size: editorFontPointSize))
                         .foregroundStyle(.secondary.opacity(0.85))
                         .padding(.leading, layoutTokens.editorInnerPadding + 8)
@@ -972,16 +1001,28 @@ struct TranslationView: View {
             #endif
             .clipped()
             #if os(iOS)
-            .background(outputEditorBackgroundShape.fill(iOSFieldBackgroundColor))
-            .overlay(outputEditorBackgroundShape.stroke(Color.primary.opacity(0.10), lineWidth: 1))
+            .background {
+                if isUnifiedStackedFieldLayout {
+                    Color.clear
+                } else {
+                    RoundedRectangle(cornerRadius: editorCornerRadius)
+                        .fill(iOSFieldBackgroundColor)
+                }
+            }
+            .overlay {
+                if !isUnifiedStackedFieldLayout {
+                    RoundedRectangle(cornerRadius: editorCornerRadius)
+                        .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                }
+            }
             .overlay(alignment: .top) {
                 pinchOverlay(host: .output)
             }
             .overlay(alignment: .top) {
                 if isUnifiedStackedFieldLayout {
                     outputOverlayTopControls
-                        .padding(.top, 10)
-                        .padding(.horizontal, 10)
+                        .padding(.top, 0)
+                        .padding(.horizontal, 0)
                 }
             }
             #else
@@ -1006,10 +1047,40 @@ struct TranslationView: View {
 
     @ViewBuilder
     private var outputHeaderCenteredControlGroup: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: translationGroupInnerSpacing) {
             inlineLanguageMenu
             outputTranslateButton
         }
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, translationGroupHorizontalPadding)
+        .padding(.vertical, 7)
+        .background(.thinMaterial, in: outputTopDockShape)
+        .overlay {
+            outputTopDockShape
+                .stroke(Color.white.opacity(colorScheme == .dark ? 0.26 : 0.38), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            outputTopDockShape
+                .fill(Color.white.opacity(colorScheme == .dark ? 0.05 : 0.14))
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            outputTopDockShape
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(colorScheme == .dark ? 0.16 : 0.24),
+                            Color.white.opacity(0.01),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .allowsHitTesting(false)
+        }
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.20 : 0.10), radius: 6, y: 2)
+        .zIndex(3)
         .opacity(viewModel.targetLanguageOptions.isEmpty ? 0.55 : 1)
     }
 
@@ -1090,7 +1161,23 @@ struct TranslationView: View {
         .padding(cardOuterPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         #if os(iOS)
-        .background(Color.clear)
+        .background {
+            if isUnifiedStackedFieldLayout {
+                outputFieldWrapperShape.fill(iOSFieldBackgroundColor)
+            } else {
+                Color.clear
+            }
+        }
+        .overlay {
+            if isUnifiedStackedFieldLayout {
+                outputFieldWrapperShape
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                Rectangle()
+                    .fill(iOSFieldBackgroundColor)
+                    .frame(height: 1)
+                    .allowsHitTesting(false)
+            }
+        }
         #else
         .background {
             if usesCompactDesktopLayout {
@@ -1384,68 +1471,123 @@ struct TranslationView: View {
         colorScheme == .dark ? Color.black.opacity(0.24) : Color.white.opacity(0.30)
     }
 
-    private var sourceEditorBackgroundShape: AnyShape {
-        if isUnifiedStackedFieldLayout {
-            return AnyShape(RoundedCornerShape(corners: [.topLeft, .topRight], radius: editorCornerRadius))
-        } else {
-            return AnyShape(RoundedRectangle(cornerRadius: editorCornerRadius))
-        }
+    private var unifiedFieldWrapperCornerRadius: CGFloat {
+        18
     }
 
-    private var outputEditorBackgroundShape: AnyShape {
-        if isUnifiedStackedFieldLayout {
-            return AnyShape(RoundedCornerShape(corners: [.bottomLeft, .bottomRight], radius: editorCornerRadius))
-        } else {
-            return AnyShape(RoundedRectangle(cornerRadius: editorCornerRadius))
-        }
+    private var sourceFieldWrapperShape: AnyShape {
+        AnyShape(
+            RoundedCornerShape(
+                corners: [.topLeft, .topRight],
+                radius: unifiedFieldWrapperCornerRadius
+            )
+        )
+    }
+
+    private var outputFieldWrapperShape: AnyShape {
+        AnyShape(
+            RoundedCornerShape(
+                corners: [.bottomLeft, .bottomRight],
+                radius: unifiedFieldWrapperCornerRadius
+            )
+        )
     }
 
     @ViewBuilder
     private var sourceOverlayButtonGroup: some View {
+        let hasSourceText = !viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let canImportOrPaste = !isImportLoading && !viewModel.isTranslating && !hasSourceText
         HStack(spacing: 8) {
             Button {
                 presentFileImporter()
             } label: {
                 Image(systemName: "folder")
                     .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 44, height: 34)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
             .accessibilityLabel(localized("ui.import.files", defaultValue: "Files"))
-            .disabled(isImportLoading || viewModel.isTranslating)
+            .disabled(!canImportOrPaste)
 
             Button {
                 presentPhotoPicker()
             } label: {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 44, height: 34)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
             .accessibilityLabel(localized("ui.import.album", defaultValue: "Album"))
-            .disabled(isImportLoading || viewModel.isTranslating)
+            .disabled(!canImportOrPaste)
 
             Button(action: pasteInputFromClipboard) {
                 Image(systemName: "doc.on.clipboard")
                     .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 44, height: 34)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
             .accessibilityLabel(localized("ui.action.paste", defaultValue: "Paste"))
-            .disabled(isImportLoading || viewModel.isTranslating)
+            .disabled(!canImportOrPaste)
 
             Button {
                 viewModel.clearSourceTextAndResetLanguageState()
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 44, height: 34)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
             .accessibilityLabel(localized("ui.action.clear", defaultValue: "Clear"))
-            .disabled(viewModel.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(!hasSourceText)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial, in: sourceBottomDockShape)
+        .overlay {
+            sourceBottomDockShape
+                .stroke(Color.white.opacity(colorScheme == .dark ? 0.22 : 0.32), lineWidth: 1)
+                .allowsHitTesting(false)
         }
         .opacity((isImportLoading || viewModel.isTranslating) ? 0.55 : 1)
     }
+
     #else
     private var isUnifiedStackedFieldLayout: Bool { false }
     #endif
+
+    private var sourceBottomDockShape: AnyShape {
+        #if os(iOS)
+        AnyShape(
+            RoundedCornerShape(
+                corners: [.topLeft, .topRight],
+                radius: 16
+            )
+        )
+        #else
+        AnyShape(Capsule())
+        #endif
+    }
+
+    private var outputTopDockShape: AnyShape {
+        #if os(iOS)
+        AnyShape(
+            RoundedCornerShape(
+                corners: [.bottomLeft, .bottomRight],
+                radius: 16
+            )
+        )
+        #else
+        AnyShape(Capsule())
+        #endif
+    }
+
+    private var translationGroupInnerSpacing: CGFloat {
+        8
+    }
+
+    private var translationGroupHorizontalPadding: CGFloat {
+        12
+    }
 
     private var editorMinHeight: CGFloat {
         layoutTokens.editorMinHeight

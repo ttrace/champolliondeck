@@ -32,6 +32,7 @@
 "ui.dev.console" = "콘솔";
 "ui.section.source" = "원문";
 "ui.section.output" = "번역";
+"ui.placeholder.source_input" = "번역할 문장을 입력하세요";
 "ui.action.paste" = "붙여넣기";
 "ui.action.import" = "가져오기";
 "ui.import.files" = "파일";

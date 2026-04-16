@@ -32,6 +32,7 @@
 "ui.dev.console" = "控制台";
 "ui.section.source" = "源文本";
 "ui.section.output" = "输出";
+"ui.placeholder.source_input" = "请输入要翻译的文本";
 "ui.action.paste" = "粘贴";
 "ui.action.import" = "导入";
 "ui.import.files" = "文件";

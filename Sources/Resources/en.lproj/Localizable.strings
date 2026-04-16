@@ -32,6 +32,7 @@
 "ui.dev.console" = "Console";
 "ui.section.source" = "Source";
 "ui.section.output" = "Output";
+"ui.placeholder.source_input" = "Enter text to translate.";
 "ui.action.paste" = "Paste";
 "ui.action.import" = "Import";
 "ui.import.files" = "Files";
