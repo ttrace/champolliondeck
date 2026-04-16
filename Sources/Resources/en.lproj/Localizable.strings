@@ -44,3 +44,9 @@
 "ui.action.ok" = "OK";
 "ui.alert.open_settings" = "Open Settings";
 "ui.import.shared_text_imported" = "Shared text imported.";
+"alert.same_language_pair.title" = "Same Language Pair";
+"alert.same_language_pair.message_format" = "The source and target language are the same (%@). Select a different target language and try again.";
+"alert.same_language_pair.inline_format" = "Cannot translate with the same language pair (%@).";
+"status.notice.same_language_untranslatable" = "Could not translate because source and target are the same language.";
+"status.notice.ai_fallback_to_tf" = "AI translation could not complete, so machine translation was used.";
+"status.notice.unknown_source_language" = "Could not translate because the source language could not be detected.";

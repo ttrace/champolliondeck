@@ -3,6 +3,58 @@ import Foundation
 @preconcurrency import Translation
 #endif
 
+enum AppLocalization {
+    static func localized(_ key: String, defaultValue: String) -> String {
+        for bundle in candidateBundles {
+            let value = bundle.localizedString(forKey: key, value: nil, table: nil)
+            if value != key {
+                return value
+            }
+        }
+        return defaultValue
+    }
+
+    private static let candidateBundles: [Bundle] = {
+        var bundles: [Bundle] = []
+        var seenPaths: Set<String> = []
+
+        func appendBundle(_ bundle: Bundle) {
+            let path = bundle.bundlePath
+            if seenPaths.insert(path).inserted {
+                bundles.append(bundle)
+            }
+        }
+
+        appendBundle(.main)
+
+        // SwiftPM resources for macOS app builds are packaged under
+        // Contents/Resources/*.bundle (for example PreBabelLens_PreBabelLens.bundle).
+        // Search only inside the app's own resource directory to avoid touching
+        // workspace paths (Documents) that can trigger privacy prompts.
+        if let resourceURL = Bundle.main.resourceURL,
+           let urls = try? FileManager.default.contentsOfDirectory(
+                at: resourceURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+           ) {
+            for url in urls where url.pathExtension == "bundle" {
+                guard let bundle = Bundle(url: url) else { continue }
+                if bundle.path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: "en") != nil
+                    || bundle.path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: "ja") != nil
+                {
+                    appendBundle(bundle)
+                }
+            }
+        }
+
+        appendBundle(Bundle(for: BundleToken.self))
+
+        return bundles
+    }()
+}
+
+private final class BundleToken {}
+
 @MainActor
 final class TranslationViewModel: ObservableObject {
     private enum AppStateKey {
@@ -99,6 +151,7 @@ final class TranslationViewModel: ObservableObject {
     private let orchestrator: TranslationOrchestrator
     private let iOSEnginePolicy: IOSAdaptiveTranslationEnginePolicy?
     private let userDefaults: UserDefaults
+    private let preferredLanguages: [String]
     private var shouldTranslateOnLaunch: Bool = false
     private var shouldActivateAppOnLaunch: Bool = false
     private var partialTranslationsBySegment: [Int: String] = [:]
@@ -116,15 +169,18 @@ final class TranslationViewModel: ObservableObject {
     private var tfMenuAvailabilityTask: Task<Void, Never>?
     private var tfMenuInputRefreshTask: Task<Void, Never>?
     private var tfMenuPreparationTargetLanguageCode: String?
+    private var lastMenuSourceLanguageCode: String?
 
     init(
         orchestrator: TranslationOrchestrator,
         iOSEnginePolicy: IOSAdaptiveTranslationEnginePolicy? = nil,
         launchInputText: String? = nil,
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        preferredLanguages: [String] = Locale.preferredLanguages
     ) {
         self.userDefaults = userDefaults
         self.iOSEnginePolicy = iOSEnginePolicy
+        self.preferredLanguages = preferredLanguages
         self.experimentMode = TranslationExperimentMode(
             rawValue: userDefaults.string(forKey: AppStateKey.experimentMode) ?? ""
         ) ?? .segmented
@@ -135,10 +191,11 @@ final class TranslationViewModel: ObservableObject {
             initialOptions.contains(where: { $0.code == persistedTargetLanguage })
         {
             self.targetLanguage = persistedTargetLanguage
-        } else if initialOptions.contains(where: { $0.code == "ja" }) {
-            self.targetLanguage = "ja"
         } else {
-            self.targetLanguage = initialOptions.first?.code ?? "en"
+            self.targetLanguage = Self.preferredDefaultTargetLanguageCode(
+                from: initialOptions,
+                preferredLanguages: preferredLanguages
+            ) ?? "en-US"
         }
         self.orchestrator = orchestrator
         refreshEnginePreference()
@@ -271,9 +328,42 @@ final class TranslationViewModel: ObservableObject {
 
     func handleSourceTextPasted(_ text: String) {
         let normalized = normalizedLineEndings(in: text)
-        let detection = HeuristicLanguageDetector.detectLanguage(text: normalized)
         inputText = normalized
+        refreshLanguageMenuSourceLanguage()
+    }
+
+    func refreshLanguageMenuSourceLanguage() {
+        let normalized = normalizedLineEndings(in: inputText)
+        if inputText != normalized {
+            inputText = normalized
+        }
+
+        let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            detectedLanguageCode = ""
+            refreshTFMenuAvailabilityIfNeeded()
+            return
+        }
+
+        let detection = HeuristicLanguageDetector.detectLanguage(text: normalized)
+        let normalizedDetected = normalizedLanguageCode(detection.detectedLanguageCode)
+        let normalizedTarget = normalizedLanguageCode(targetLanguage)
+
+        if
+            !normalizedDetected.isEmpty,
+            normalizedDetected != "und",
+            normalizedDetected == normalizedTarget,
+            let previousSource = lastMenuSourceLanguageCode,
+            previousSource != normalizedDetected,
+            let fallbackTargetCode = targetLanguageOptions.first(where: { normalizedLanguageCode($0.code) == previousSource })?.code
+        {
+            targetLanguage = fallbackTargetCode
+        }
+
         detectedLanguageCode = detection.detectedLanguageCode
+        if !normalizedDetected.isEmpty, normalizedDetected != "und" {
+            lastMenuSourceLanguageCode = normalizedDetected
+        }
         refreshTFMenuAvailabilityIfNeeded()
     }
 
@@ -376,11 +466,10 @@ final class TranslationViewModel: ObservableObject {
             persistTargetLanguageSelection()
             return
         }
-        if let japanese = targetLanguageOptions.first(where: { $0.code == "ja" }) {
-            targetLanguage = japanese.code
-            return
-        }
-        targetLanguage = targetLanguageOptions[0].code
+        targetLanguage = Self.preferredDefaultTargetLanguageCode(
+            from: targetLanguageOptions,
+            preferredLanguages: preferredLanguages
+        ) ?? targetLanguageOptions[0].code
     }
 
     private func persistTargetLanguageSelection() {
@@ -390,6 +479,46 @@ final class TranslationViewModel: ObservableObject {
 
     private func persistExperimentModeSelection() {
         userDefaults.set(experimentMode.rawValue, forKey: AppStateKey.experimentMode)
+    }
+
+    private static func preferredDefaultTargetLanguageCode(
+        from options: [TargetLanguageOption],
+        preferredLanguages: [String]
+    ) -> String? {
+        guard !options.isEmpty else { return nil }
+
+        for preferred in preferredLanguages {
+            if let matched = matchingTargetLanguageCode(for: preferred, in: options) {
+                return matched
+            }
+        }
+
+        if let englishUS = matchingTargetLanguageCode(for: "en-US", in: options) {
+            return englishUS
+        }
+        if let english = matchingTargetLanguageCode(for: "en", in: options) {
+            return english
+        }
+        return options.first?.code
+    }
+
+    private static func matchingTargetLanguageCode(for rawCode: String, in options: [TargetLanguageOption]) -> String? {
+        let normalized = normalizedLanguageIdentifier(rawCode)
+        guard !normalized.isEmpty else { return nil }
+
+        let optionPairs: [(code: String, normalized: String)] = options.map {
+            ($0.code, normalizedLanguageIdentifier($0.code))
+        }
+
+        for candidate in preferredLanguageCandidates(from: normalized) {
+            if let matched = optionPairs.first(where: { $0.normalized == candidate }) {
+                return matched.code
+            }
+        }
+
+        let base = normalizedLanguageCode(normalized)
+        guard !base.isEmpty else { return nil }
+        return optionPairs.first(where: { normalizedLanguageCode($0.normalized) == base })?.code
     }
 
     private func runManagedTranslation() async {
@@ -422,6 +551,7 @@ final class TranslationViewModel: ObservableObject {
             targetLanguage: targetLanguage,
             text: normalizedInput,
             glossary: parseGlossary(glossaryText),
+            preferredLanguages: preferredLanguages,
             experimentMode: experimentMode,
             usesAITranslation: usesAppleIntelligenceTranslation
         )
@@ -684,13 +814,21 @@ final class TranslationViewModel: ObservableObject {
             if let languagePair, normalizedLanguageCode(languagePair.source) == normalizedLanguageCode(languagePair.target) {
                 let pairLabel = "\(languagePair.source) -> \(languagePair.target)"
                 return UserAlert(
-                    title: isJapaneseLocale ? "同一言語ペアです" : "Same Language Pair",
-                    message: isJapaneseLocale
-                        ? "入力言語と出力言語が同じペアになっています（\(pairLabel)）。別の出力言語を選択して再実行してください。"
-                        : "The source and target language are the same (\(pairLabel)). Select a different target language and try again.",
-                    inlineMessage: isJapaneseLocale
-                        ? "同一言語ペア（\(pairLabel)）のため翻訳できません。"
-                        : "Cannot translate with the same language pair (\(pairLabel)).",
+                    title: localized("alert.same_language_pair.title", defaultValue: "Same Language Pair"),
+                    message: String(
+                        format: localized(
+                            "alert.same_language_pair.message_format",
+                            defaultValue: "The source and target language are the same (%@). Select a different target language and try again."
+                        ),
+                        pairLabel
+                    ),
+                    inlineMessage: String(
+                        format: localized(
+                            "alert.same_language_pair.inline_format",
+                            defaultValue: "Cannot translate with the same language pair (%@)."
+                        ),
+                        pairLabel
+                    ),
                     offersSettingsShortcut: false
                 )
             }
@@ -897,7 +1035,7 @@ final class TranslationViewModel: ObservableObject {
         return token
     }
 
-    private func normalizedLanguageCode(_ code: String) -> String {
+    private static func normalizedLanguageCode(_ code: String) -> String {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let hyphenIndex = trimmed.firstIndex(of: "-") {
             return String(trimmed[..<hyphenIndex])
@@ -906,6 +1044,75 @@ final class TranslationViewModel: ObservableObject {
             return String(trimmed[..<underscoreIndex])
         }
         return trimmed
+    }
+
+    private static func normalizedLanguageIdentifier(_ code: String) -> String {
+        let normalized = code
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "_", with: "-")
+            .lowercased()
+
+        switch normalized {
+        case "en-uk":
+            return "en-gb"
+        default:
+            return normalized
+        }
+    }
+
+    private static func preferredLanguageCandidates(from normalizedIdentifier: String) -> [String] {
+        let parts = normalizedIdentifier.split(separator: "-").map(String.init)
+        guard let language = parts.first, !language.isEmpty else { return [] }
+
+        var script: String?
+        var region: String?
+
+        for part in parts.dropFirst() {
+            if part.count == 4 {
+                script = part.lowercased()
+            } else if part.count == 2 || part.count == 3 {
+                region = part.uppercased()
+            }
+        }
+
+        if script == nil, let inferred = inferredChineseScript(language: language, region: region) {
+            script = inferred
+        }
+
+        var candidates: [String] = [normalizedIdentifier]
+        if let script {
+            if let region {
+                candidates.append("\(language)-\(script)-\(region.lowercased())")
+            }
+            candidates.append("\(language)-\(script)")
+        }
+        if let region {
+            candidates.append("\(language)-\(region.lowercased())")
+        }
+        candidates.append(language)
+
+        var seen: Set<String> = []
+        return candidates.filter { seen.insert($0).inserted }
+    }
+
+    private static func inferredChineseScript(language: String, region: String?) -> String? {
+        guard language == "zh", let region else { return nil }
+        switch region.uppercased() {
+        case "TW", "HK", "MO":
+            return "hant"
+        case "CN", "SG", "MY":
+            return "hans"
+        default:
+            return nil
+        }
+    }
+
+    private func normalizedLanguageCode(_ code: String) -> String {
+        Self.normalizedLanguageCode(code)
+    }
+
+    private func normalizedLanguageIdentifier(_ code: String) -> String {
+        Self.normalizedLanguageIdentifier(code)
     }
 
     private func normalizedLineEndings(in text: String) -> String {
@@ -1081,8 +1288,7 @@ final class TranslationViewModel: ObservableObject {
     }
 
     private func localized(_ key: String, defaultValue: String) -> String {
-        let bundle = Bundle.main
-        return NSLocalizedString(key, bundle: bundle, value: defaultValue, comment: "")
+        AppLocalization.localized(key, defaultValue: defaultValue)
     }
 
     private func makeStatusNotices(output: TranslationOutput, request: TranslationRequest) -> [StatusNotice] {
@@ -1120,19 +1326,28 @@ final class TranslationViewModel: ObservableObject {
         case .sameLanguageUntranslatable:
             return StatusNotice(
                 markerText: "text",
-                text: "同一言語のために翻訳できませんでした",
+                text: localized(
+                    "status.notice.same_language_untranslatable",
+                    defaultValue: "Could not translate because source and target are the same language."
+                ),
                 style: .orange
             )
         case .aiFallbackToMachineTranslation:
             return StatusNotice(
                 markerText: "text",
-                text: "AI出力できなかったため機械翻訳しました",
+                text: localized(
+                    "status.notice.ai_fallback_to_tf",
+                    defaultValue: "AI translation could not complete, so machine translation was used."
+                ),
                 style: .blue
             )
         case .unknownSourceLanguage:
             return StatusNotice(
                 markerText: "text",
-                text: "元言語が不明だったため翻訳できませんでした",
+                text: localized(
+                    "status.notice.unknown_source_language",
+                    defaultValue: "Could not translate because the source language could not be detected."
+                ),
                 style: .orange
             )
         }
@@ -1148,9 +1363,9 @@ final class TranslationViewModel: ObservableObject {
         if normalized.isEmpty || normalized == "und" {
             switch role {
             case .source:
-                return isJapaneseLocale ? "入力言語" : "source language"
+                return localized("tf.menu.source_language_fallback", defaultValue: "source language")
             case .target:
-                return isJapaneseLocale ? "出力言語" : "target language"
+                return localized("tf.menu.target_language_fallback", defaultValue: "target language")
             }
         }
         return code

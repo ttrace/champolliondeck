@@ -44,3 +44,9 @@
 "ui.action.ok" = "OK";
 "ui.alert.open_settings" = "Settings を開く";
 "ui.import.shared_text_imported" = "共有テキストを取り込みました";
+"alert.same_language_pair.title" = "同一言語ペアです";
+"alert.same_language_pair.message_format" = "入力言語と出力言語が同じペアになっています（%@）。別の出力言語を選択して再実行してください。";
+"alert.same_language_pair.inline_format" = "同一言語ペア（%@）のため翻訳できません。";
+"status.notice.same_language_untranslatable" = "同一言語のために翻訳できませんでした";
+"status.notice.ai_fallback_to_tf" = "AI出力できなかったため機械翻訳しました";
+"status.notice.unknown_source_language" = "元言語が不明だったため翻訳できませんでした";

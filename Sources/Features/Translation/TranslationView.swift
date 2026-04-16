@@ -171,6 +171,9 @@ struct TranslationView: View {
             }
             #endif
         }
+        #if os(iOS)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        #endif
         .onChange(of: viewModel.isTranslating) { _, isTranslating in
             if isTranslating {
                 disableCompactOutputReadingModeIfNeeded()
@@ -530,6 +533,11 @@ struct TranslationView: View {
                 }
             }
             .fixedSize(horizontal: true, vertical: false)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    viewModel.refreshLanguageMenuSourceLanguage()
+                }
+            )
         }
     }
 
@@ -571,6 +579,11 @@ struct TranslationView: View {
                 }
             }
             .fixedSize(horizontal: true, vertical: false)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    viewModel.refreshLanguageMenuSourceLanguage()
+                }
+            )
             #if os(macOS)
             // Keep the same font but remove extra trailing menu-indicator padding.
             .menuIndicator(.hidden)
@@ -757,10 +770,14 @@ struct TranslationView: View {
                 #endif
                 Button(localized("ui.action.paste", defaultValue: "Paste"), action: pasteInputFromClipboard)
                     .buttonStyle(.bordered)
-                Button(localized("ui.action.clear", defaultValue: "Clear")) {
+                Button {
                     viewModel.clearSourceTextAndResetLanguageState()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .semibold))
                 }
                 .buttonStyle(.bordered)
+                .accessibilityLabel(localized("ui.action.clear", defaultValue: "Clear"))
             }
 
             sourceEditor
@@ -815,6 +832,9 @@ struct TranslationView: View {
             onDownwardSwipeWhileRestoreLocked: handleSourceRestoreSwipeGesture,
             onScrollStateChanged: handleSourceScrollStateChange,
             onCursorLocationChanged: handleSourceCursorLocationChange,
+            onEditingEnded: {
+                viewModel.refreshLanguageMenuSourceLanguage()
+            },
             onPastedImage: { image in
                 Task { @MainActor in
                     await handlePastedImageOnIOS(image)
@@ -863,34 +883,28 @@ struct TranslationView: View {
 
     private var outputContent: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(localized("ui.section.output", defaultValue: "Output"))
-                    .font(.system(size: layoutTokens.sectionTitleFontSize, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                Spacer()
-                if usesInlineLanguageMenuInOutputCard {
-                    inlineLanguageMenu
+            if usesInlineLanguageMenuInOutputCard {
+                ZStack {
+                    HStack {
+                        Text(localized("ui.section.output", defaultValue: "Output"))
+                            .font(.system(size: layoutTokens.sectionTitleFontSize, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                        Spacer()
+                        outputCopyButton
+                    }
+                    outputHeaderCenteredControlGroup
                 }
-
-                Button {
-                    copyOutputToClipboard()
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                        .font(.system(size: 16, weight: .semibold))
+            } else {
+                HStack {
+                    Text(localized("ui.section.output", defaultValue: "Output"))
+                        .font(.system(size: layoutTokens.sectionTitleFontSize, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Spacer()
+                    outputCopyButton
+                    outputTranslateButton
                 }
-                .buttonStyle(.bordered)
-                .help(localized("ui.action.copy_output", defaultValue: "Copy output"))
-                .disabled(viewModel.translatedText.isEmpty)
-
-                Button(localized("menu.translate.action.translate", defaultValue: "Translate")) {
-                    #if os(iOS)
-                    dismissKeyboard()
-                    #endif
-                    Task { await viewModel.translate() }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(viewModel.isTranslating || viewModel.targetLanguageOptions.isEmpty)
             }
 
             ScrollViewReader { proxy in
@@ -951,6 +965,52 @@ struct TranslationView: View {
             )
             #endif
         }
+    }
+
+    @ViewBuilder
+    private var outputHeaderCenteredControlGroup: some View {
+        HStack(spacing: 8) {
+            inlineLanguageMenu
+            outputTranslateButton
+        }
+    }
+
+    @ViewBuilder
+    private var outputCopyButton: some View {
+        Button {
+            copyOutputToClipboard()
+        } label: {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 16, weight: .semibold))
+        }
+        .buttonStyle(.bordered)
+        .help(localized("ui.action.copy_output", defaultValue: "Copy output"))
+        .disabled(viewModel.translatedText.isEmpty)
+    }
+
+    @ViewBuilder
+    private var outputTranslateButton: some View {
+        Button {
+            #if os(iOS)
+            dismissKeyboard()
+            #endif
+            Task { await viewModel.translate() }
+        } label: {
+            Image(systemName: "translate")
+                .symbolRenderingMode(.hierarchical)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(minWidth: 44, minHeight: 34)
+                .padding(.horizontal, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.blue)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(localized("menu.translate.action.translate", defaultValue: "Translate"))
+        .opacity(viewModel.isTranslating || viewModel.targetLanguageOptions.isEmpty ? 0.5 : 1)
+        .disabled(viewModel.isTranslating || viewModel.targetLanguageOptions.isEmpty)
     }
 
     @ViewBuilder
@@ -1599,7 +1659,7 @@ struct TranslationView: View {
     }
 
     private func localized(_ key: String, defaultValue: String) -> String {
-        NSLocalizedString(key, bundle: .main, value: defaultValue, comment: "")
+        AppLocalization.localized(key, defaultValue: defaultValue)
     }
 
     #if os(macOS)
@@ -2529,6 +2589,7 @@ struct TranslationView: View {
             from: nil,
             for: nil
         )
+        viewModel.refreshLanguageMenuSourceLanguage()
     }
 
     @ViewBuilder
@@ -2756,6 +2817,7 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
     let onDownwardSwipeWhileRestoreLocked: () -> Void
     let onScrollStateChanged: (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void
     let onCursorLocationChanged: (Int) -> Void
+    let onEditingEnded: () -> Void
     let onPastedImage: (UIImage) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -2763,7 +2825,8 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
             text: $text,
             onCursorLocationChanged: onCursorLocationChanged,
             onDownwardSwipeWhileRestoreLocked: onDownwardSwipeWhileRestoreLocked,
-            onScrollStateChanged: onScrollStateChanged
+            onScrollStateChanged: onScrollStateChanged,
+            onEditingEnded: onEditingEnded
         )
     }
 
@@ -2807,6 +2870,7 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
         private let onCursorLocationChanged: (Int) -> Void
         private let onDownwardSwipeWhileRestoreLocked: () -> Void
         private let onScrollStateChanged: (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void
+        private let onEditingEnded: () -> Void
         private weak var textView: UITextView?
         private var isProgrammaticUpdateInProgress: Bool = false
         private var lockDownwardScrollForRestore: Bool = false
@@ -2816,12 +2880,14 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
             text: Binding<String>,
             onCursorLocationChanged: @escaping (Int) -> Void,
             onDownwardSwipeWhileRestoreLocked: @escaping () -> Void,
-            onScrollStateChanged: @escaping (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void
+            onScrollStateChanged: @escaping (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void,
+            onEditingEnded: @escaping () -> Void
         ) {
             _text = text
             self.onCursorLocationChanged = onCursorLocationChanged
             self.onDownwardSwipeWhileRestoreLocked = onDownwardSwipeWhileRestoreLocked
             self.onScrollStateChanged = onScrollStateChanged
+            self.onEditingEnded = onEditingEnded
         }
 
         func attachTextView(_ textView: UITextView) {
@@ -2876,6 +2942,7 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
 
         func textViewDidEndEditing(_ textView: UITextView) {
             onCursorLocationChanged(textView.selectedRange.location)
+            onEditingEnded()
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -3345,11 +3412,9 @@ enum SourceDropImport {
     }
 
     private static func postImportFailureMessage() async {
-        let message = NSLocalizedString(
+        let message = AppLocalization.localized(
             "menu.file.import.failed.message",
-            bundle: .main,
-            value: "This file does not contain supported text content.",
-            comment: ""
+            defaultValue: "This file does not contain supported text content."
         )
         await MainActor.run {
             NotificationCenter.default.post(
@@ -3912,20 +3977,16 @@ private extension View {
                     return Alert(
                         title: Text(alert.title),
                         message: Text(alert.message),
-                        primaryButton: .default(Text(NSLocalizedString(
+                        primaryButton: .default(Text(AppLocalization.localized(
                             "ui.alert.open_settings",
-                            bundle: .main,
-                            value: "Open Settings",
-                            comment: ""
+                            defaultValue: "Open Settings"
                         ))) {
                             guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                             UIApplication.shared.open(url)
                         },
-                        secondaryButton: .cancel(Text(NSLocalizedString(
+                        secondaryButton: .cancel(Text(AppLocalization.localized(
                             "ui.action.close",
-                            bundle: .main,
-                            value: "Close",
-                            comment: ""
+                            defaultValue: "Close"
                         ))) {
                             viewModel.dismissUserAlert()
                         }
@@ -3935,11 +3996,9 @@ private extension View {
                 return Alert(
                     title: Text(alert.title),
                     message: Text(alert.message),
-                    dismissButton: .default(Text(NSLocalizedString(
+                    dismissButton: .default(Text(AppLocalization.localized(
                         "ui.action.ok",
-                        bundle: .main,
-                        value: "OK",
-                        comment: ""
+                        defaultValue: "OK"
                     ))) {
                         viewModel.dismissUserAlert()
                     }
