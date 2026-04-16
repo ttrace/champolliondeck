@@ -116,6 +116,7 @@ final class TranslationViewModel: ObservableObject {
     private var tfMenuAvailabilityTask: Task<Void, Never>?
     private var tfMenuInputRefreshTask: Task<Void, Never>?
     private var tfMenuPreparationTargetLanguageCode: String?
+    private var lastMenuSourceLanguageCode: String?
 
     init(
         orchestrator: TranslationOrchestrator,
@@ -271,9 +272,42 @@ final class TranslationViewModel: ObservableObject {
 
     func handleSourceTextPasted(_ text: String) {
         let normalized = normalizedLineEndings(in: text)
-        let detection = HeuristicLanguageDetector.detectLanguage(text: normalized)
         inputText = normalized
+        refreshLanguageMenuSourceLanguage()
+    }
+
+    func refreshLanguageMenuSourceLanguage() {
+        let normalized = normalizedLineEndings(in: inputText)
+        if inputText != normalized {
+            inputText = normalized
+        }
+
+        let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            detectedLanguageCode = ""
+            refreshTFMenuAvailabilityIfNeeded()
+            return
+        }
+
+        let detection = HeuristicLanguageDetector.detectLanguage(text: normalized)
+        let normalizedDetected = normalizedLanguageCode(detection.detectedLanguageCode)
+        let normalizedTarget = normalizedLanguageCode(targetLanguage)
+
+        if
+            !normalizedDetected.isEmpty,
+            normalizedDetected != "und",
+            normalizedDetected == normalizedTarget,
+            let previousSource = lastMenuSourceLanguageCode,
+            previousSource != normalizedDetected,
+            let fallbackTargetCode = targetLanguageOptions.first(where: { normalizedLanguageCode($0.code) == previousSource })?.code
+        {
+            targetLanguage = fallbackTargetCode
+        }
+
         detectedLanguageCode = detection.detectedLanguageCode
+        if !normalizedDetected.isEmpty, normalizedDetected != "und" {
+            lastMenuSourceLanguageCode = normalizedDetected
+        }
         refreshTFMenuAvailabilityIfNeeded()
     }
 

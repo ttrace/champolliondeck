@@ -225,6 +225,23 @@ struct TranslationViewModelURLHandlingTests {
         #expect(await counter.current() == 1)
     }
 
+    @Test
+    @MainActor
+    func refreshLanguageMenuSourceLanguageSwitchesTargetToPreviousSourceWhenDetectedEqualsTarget() {
+        let counter = TranslationCallCounter()
+        let viewModel = makeViewModel(counter: counter)
+
+        viewModel.targetLanguage = "ja"
+        viewModel.handleSourceTextPasted("Hello world")
+        #expect(viewModel.detectedLanguageCode == "en")
+        #expect(viewModel.targetLanguage == "ja")
+
+        viewModel.handleSourceTextPasted("こんにちは、世界")
+
+        #expect(viewModel.detectedLanguageCode == "ja")
+        #expect(viewModel.targetLanguage == "en")
+    }
+
     @MainActor
     private func makeViewModel(
         counter: TranslationCallCounter,

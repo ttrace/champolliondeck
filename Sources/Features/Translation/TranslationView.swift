@@ -530,6 +530,11 @@ struct TranslationView: View {
                 }
             }
             .fixedSize(horizontal: true, vertical: false)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    viewModel.refreshLanguageMenuSourceLanguage()
+                }
+            )
         }
     }
 
@@ -571,6 +576,11 @@ struct TranslationView: View {
                 }
             }
             .fixedSize(horizontal: true, vertical: false)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    viewModel.refreshLanguageMenuSourceLanguage()
+                }
+            )
             #if os(macOS)
             // Keep the same font but remove extra trailing menu-indicator padding.
             .menuIndicator(.hidden)
@@ -815,6 +825,9 @@ struct TranslationView: View {
             onDownwardSwipeWhileRestoreLocked: handleSourceRestoreSwipeGesture,
             onScrollStateChanged: handleSourceScrollStateChange,
             onCursorLocationChanged: handleSourceCursorLocationChange,
+            onEditingEnded: {
+                viewModel.refreshLanguageMenuSourceLanguage()
+            },
             onPastedImage: { image in
                 Task { @MainActor in
                     await handlePastedImageOnIOS(image)
@@ -2529,6 +2542,7 @@ struct TranslationView: View {
             from: nil,
             for: nil
         )
+        viewModel.refreshLanguageMenuSourceLanguage()
     }
 
     @ViewBuilder
@@ -2756,6 +2770,7 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
     let onDownwardSwipeWhileRestoreLocked: () -> Void
     let onScrollStateChanged: (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void
     let onCursorLocationChanged: (Int) -> Void
+    let onEditingEnded: () -> Void
     let onPastedImage: (UIImage) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -2763,7 +2778,8 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
             text: $text,
             onCursorLocationChanged: onCursorLocationChanged,
             onDownwardSwipeWhileRestoreLocked: onDownwardSwipeWhileRestoreLocked,
-            onScrollStateChanged: onScrollStateChanged
+            onScrollStateChanged: onScrollStateChanged,
+            onEditingEnded: onEditingEnded
         )
     }
 
@@ -2807,6 +2823,7 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
         private let onCursorLocationChanged: (Int) -> Void
         private let onDownwardSwipeWhileRestoreLocked: () -> Void
         private let onScrollStateChanged: (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void
+        private let onEditingEnded: () -> Void
         private weak var textView: UITextView?
         private var isProgrammaticUpdateInProgress: Bool = false
         private var lockDownwardScrollForRestore: Bool = false
@@ -2816,12 +2833,14 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
             text: Binding<String>,
             onCursorLocationChanged: @escaping (Int) -> Void,
             onDownwardSwipeWhileRestoreLocked: @escaping () -> Void,
-            onScrollStateChanged: @escaping (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void
+            onScrollStateChanged: @escaping (_ scrollDistanceFromTop: CGFloat, _ topSpringDistance: CGFloat, _ isDragging: Bool) -> Void,
+            onEditingEnded: @escaping () -> Void
         ) {
             _text = text
             self.onCursorLocationChanged = onCursorLocationChanged
             self.onDownwardSwipeWhileRestoreLocked = onDownwardSwipeWhileRestoreLocked
             self.onScrollStateChanged = onScrollStateChanged
+            self.onEditingEnded = onEditingEnded
         }
 
         func attachTextView(_ textView: UITextView) {
@@ -2876,6 +2895,7 @@ private struct IOSClutchSourceTextEditor: UIViewRepresentable {
 
         func textViewDidEndEditing(_ textView: UITextView) {
             onCursorLocationChanged(textView.selectedRange.location)
+            onEditingEnded()
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
