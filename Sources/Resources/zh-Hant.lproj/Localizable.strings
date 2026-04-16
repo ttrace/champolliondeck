@@ -44,3 +44,9 @@
 "ui.action.ok" = "好";
 "ui.alert.open_settings" = "打開設定";
 "ui.import.shared_text_imported" = "已匯入分享文字。";
+"alert.same_language_pair.title" = "相同語言配對";
+"alert.same_language_pair.message_format" = "來源語言與目標語言相同（%@）。請改選其他目標語言後再試一次。";
+"alert.same_language_pair.inline_format" = "相同語言配對（%@）無法翻譯。";
+"status.notice.same_language_untranslatable" = "來源語言與目標語言相同，無法翻譯。";
+"status.notice.ai_fallback_to_tf" = "AI 翻譯無法完成，已改用機器翻譯。";
+"status.notice.unknown_source_language" = "無法偵測來源語言，無法翻譯。";
