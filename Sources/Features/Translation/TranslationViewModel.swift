@@ -25,10 +25,28 @@ enum AppLocalization {
             }
         }
 
-        #if SWIFT_PACKAGE
-        appendBundle(.module)
-        #endif
         appendBundle(.main)
+
+        // SwiftPM resources for macOS app builds are packaged under
+        // Contents/Resources/*.bundle (for example PreBabelLens_PreBabelLens.bundle).
+        // Search only inside the app's own resource directory to avoid touching
+        // workspace paths (Documents) that can trigger privacy prompts.
+        if let resourceURL = Bundle.main.resourceURL,
+           let urls = try? FileManager.default.contentsOfDirectory(
+                at: resourceURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+           ) {
+            for url in urls where url.pathExtension == "bundle" {
+                guard let bundle = Bundle(url: url) else { continue }
+                if bundle.path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: "en") != nil
+                    || bundle.path(forResource: "Localizable", ofType: "strings", inDirectory: nil, forLocalization: "ja") != nil
+                {
+                    appendBundle(bundle)
+                }
+            }
+        }
+
         appendBundle(Bundle(for: BundleToken.self))
 
         return bundles
