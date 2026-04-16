@@ -111,6 +111,22 @@ struct TranslationViewModelURLHandlingTests {
     }
 
     @Test
+    @MainActor
+    func initialTargetLanguagePrefersBritishEnglishWhenPreferredIsEnGB() {
+        let counter = TranslationCallCounter()
+        let viewModel = makeViewModel(counter: counter, preferredLanguages: ["en-GB"])
+        #expect(viewModel.targetLanguage.lowercased() == "en-gb")
+    }
+
+    @Test
+    @MainActor
+    func initialTargetLanguageNormalizesEnUKToBritishEnglish() {
+        let counter = TranslationCallCounter()
+        let viewModel = makeViewModel(counter: counter, preferredLanguages: ["en-UK"])
+        #expect(viewModel.targetLanguage.lowercased() == "en-gb")
+    }
+
+    @Test
     func handleIncomingURLUpdatesInputAndTranslates() async throws {
         let counter = TranslationCallCounter()
         let viewModel = await makeViewModel(counter: counter)

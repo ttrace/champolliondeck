@@ -986,10 +986,17 @@ final class TranslationViewModel: ObservableObject {
     }
 
     private static func normalizedLanguageIdentifier(_ code: String) -> String {
-        code
+        let normalized = code
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "_", with: "-")
             .lowercased()
+
+        switch normalized {
+        case "en-uk":
+            return "en-gb"
+        default:
+            return normalized
+        }
     }
 
     private static func preferredLanguageCandidates(from normalizedIdentifier: String) -> [String] {
