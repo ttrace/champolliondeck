@@ -171,6 +171,9 @@ struct TranslationView: View {
             }
             #endif
         }
+        #if os(iOS)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        #endif
         .onChange(of: viewModel.isTranslating) { _, isTranslating in
             if isTranslating {
                 disableCompactOutputReadingModeIfNeeded()
@@ -767,10 +770,14 @@ struct TranslationView: View {
                 #endif
                 Button(localized("ui.action.paste", defaultValue: "Paste"), action: pasteInputFromClipboard)
                     .buttonStyle(.bordered)
-                Button(localized("ui.action.clear", defaultValue: "Clear")) {
+                Button {
                     viewModel.clearSourceTextAndResetLanguageState()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .semibold))
                 }
                 .buttonStyle(.bordered)
+                .accessibilityLabel(localized("ui.action.clear", defaultValue: "Clear"))
             }
 
             sourceEditor
@@ -876,34 +883,28 @@ struct TranslationView: View {
 
     private var outputContent: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(localized("ui.section.output", defaultValue: "Output"))
-                    .font(.system(size: layoutTokens.sectionTitleFontSize, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                Spacer()
-                if usesInlineLanguageMenuInOutputCard {
-                    inlineLanguageMenu
+            if usesInlineLanguageMenuInOutputCard {
+                ZStack {
+                    HStack {
+                        Text(localized("ui.section.output", defaultValue: "Output"))
+                            .font(.system(size: layoutTokens.sectionTitleFontSize, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                        Spacer()
+                        outputCopyButton
+                    }
+                    outputHeaderCenteredControlGroup
                 }
-
-                Button {
-                    copyOutputToClipboard()
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                        .font(.system(size: 16, weight: .semibold))
+            } else {
+                HStack {
+                    Text(localized("ui.section.output", defaultValue: "Output"))
+                        .font(.system(size: layoutTokens.sectionTitleFontSize, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Spacer()
+                    outputCopyButton
+                    outputTranslateButton
                 }
-                .buttonStyle(.bordered)
-                .help(localized("ui.action.copy_output", defaultValue: "Copy output"))
-                .disabled(viewModel.translatedText.isEmpty)
-
-                Button(localized("menu.translate.action.translate", defaultValue: "Translate")) {
-                    #if os(iOS)
-                    dismissKeyboard()
-                    #endif
-                    Task { await viewModel.translate() }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(viewModel.isTranslating || viewModel.targetLanguageOptions.isEmpty)
             }
 
             ScrollViewReader { proxy in
@@ -964,6 +965,52 @@ struct TranslationView: View {
             )
             #endif
         }
+    }
+
+    @ViewBuilder
+    private var outputHeaderCenteredControlGroup: some View {
+        HStack(spacing: 8) {
+            inlineLanguageMenu
+            outputTranslateButton
+        }
+    }
+
+    @ViewBuilder
+    private var outputCopyButton: some View {
+        Button {
+            copyOutputToClipboard()
+        } label: {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 16, weight: .semibold))
+        }
+        .buttonStyle(.bordered)
+        .help(localized("ui.action.copy_output", defaultValue: "Copy output"))
+        .disabled(viewModel.translatedText.isEmpty)
+    }
+
+    @ViewBuilder
+    private var outputTranslateButton: some View {
+        Button {
+            #if os(iOS)
+            dismissKeyboard()
+            #endif
+            Task { await viewModel.translate() }
+        } label: {
+            Image(systemName: "translate")
+                .symbolRenderingMode(.hierarchical)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(minWidth: 44, minHeight: 34)
+                .padding(.horizontal, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.blue)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(localized("menu.translate.action.translate", defaultValue: "Translate"))
+        .opacity(viewModel.isTranslating || viewModel.targetLanguageOptions.isEmpty ? 0.5 : 1)
+        .disabled(viewModel.isTranslating || viewModel.targetLanguageOptions.isEmpty)
     }
 
     @ViewBuilder
