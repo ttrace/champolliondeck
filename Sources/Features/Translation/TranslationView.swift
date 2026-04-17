@@ -164,7 +164,7 @@ struct TranslationView: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-            if isKeyboardPresented && !isIPadLandscapeLayoutActive {
+            if isKeyboardPresented && !isPadDevice {
                 VStack {
                     Spacer()
                     HStack {
@@ -512,7 +512,30 @@ struct TranslationView: View {
             Menu {
                 translationModeToggleMenuItem
                 Divider()
-                ForEach(viewModel.targetLanguageOptions) { option in
+                let recentOptions = viewModel.recentTargetLanguageOptions()
+                let remainingOptions = viewModel.remainingTargetLanguageOptionsExcludingRecent()
+                ForEach(recentOptions) { option in
+                    Button {
+                        viewModel.selectTargetLanguageFromMenu(option.code)
+                    } label: {
+                        let baseLabel = option.menuLabel(showCode: developerModeEnabled, style: currentLabelStyle)
+                        let decoratedLabel = decoratedTargetLanguageMenuLabel(baseLabel, targetLanguageCode: option.code)
+                        if option.code == viewModel.targetLanguage {
+                            Label(decoratedLabel, systemImage: "checkmark")
+                        } else {
+                            Text(decoratedLabel)
+                        }
+                    }
+                    .disabled(viewModel.isTargetLanguageSelectionDisabled(option.code))
+                    #if os(iOS)
+                    .opacity(viewModel.isTargetLanguageSelectionDisabled(option.code) ? 0.3 : 1.0)
+                    #endif
+                    .help(viewModel.targetLanguageSelectionHelpText(for: option.code) ?? "")
+                }
+                if !recentOptions.isEmpty && !remainingOptions.isEmpty {
+                    Divider()
+                }
+                ForEach(remainingOptions) { option in
                     Button {
                         viewModel.selectTargetLanguageFromMenu(option.code)
                     } label: {
@@ -558,7 +581,30 @@ struct TranslationView: View {
             Menu {
                 translationModeToggleMenuItem
                 Divider()
-                ForEach(viewModel.targetLanguageOptions) { option in
+                let recentOptions = viewModel.recentTargetLanguageOptions()
+                let remainingOptions = viewModel.remainingTargetLanguageOptionsExcludingRecent()
+                ForEach(recentOptions) { option in
+                    Button {
+                        viewModel.selectTargetLanguageFromMenu(option.code)
+                    } label: {
+                        let baseLabel = option.menuLabel(showCode: developerModeEnabled, style: currentLabelStyle)
+                        let decoratedLabel = decoratedTargetLanguageMenuLabel(baseLabel, targetLanguageCode: option.code)
+                        if option.code == viewModel.targetLanguage {
+                            Label(decoratedLabel, systemImage: "checkmark")
+                        } else {
+                            Text(decoratedLabel)
+                        }
+                    }
+                    .disabled(viewModel.isTargetLanguageSelectionDisabled(option.code))
+                    #if os(iOS)
+                    .opacity(viewModel.isTargetLanguageSelectionDisabled(option.code) ? 0.3 : 1.0)
+                    #endif
+                    .help(viewModel.targetLanguageSelectionHelpText(for: option.code) ?? "")
+                }
+                if !recentOptions.isEmpty && !remainingOptions.isEmpty {
+                    Divider()
+                }
+                ForEach(remainingOptions) { option in
                     Button {
                         viewModel.selectTargetLanguageFromMenu(option.code)
                     } label: {
@@ -1068,13 +1114,6 @@ struct TranslationView: View {
                         .padding(.horizontal, 0)
                 }
             }
-            .overlay(alignment: .bottomTrailing) {
-                if isUnifiedStackedFieldLayout {
-                    outputOverlayButtonGroup
-                        .padding(.trailing, 10)
-                        .padding(.bottom, 10)
-                }
-            }
             #else
             .background(
                 colorScheme == .dark ? Color.black.opacity(0.3) : Color.white.opacity(0.4),
@@ -1134,7 +1173,12 @@ struct TranslationView: View {
             Image(systemName: "doc.on.doc")
                 .symbolRenderingMode(.hierarchical)
                 .font(.system(size: 16, weight: .semibold))
-                .frame(width: 44, height: 34)
+                .frame(width: 34, height: 34)
+                .background(.thinMaterial, in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(colorScheme == .dark ? 0.32 : 0.70), lineWidth: 1)
+                }
         }
         .buttonStyle(InteractiveSymbolButtonStyle())
         .help(localized("ui.action.copy_output", defaultValue: "Copy output"))
@@ -1202,6 +1246,14 @@ struct TranslationView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         #if os(iOS)
         .clipShape(outputFieldClipShape)
+        .overlay(alignment: .bottomTrailing) {
+            if isUnifiedStackedFieldLayout {
+                outputOverlayButtonGroup
+                    .padding(.trailing, 10)
+                    .padding(.bottom, outputStatusReservedHeight + 10)
+                    .zIndex(8)
+            }
+        }
         .background {
             if isUnifiedStackedFieldLayout {
                 outputFieldWrapperShape.fill(iOSFieldBackgroundColor)

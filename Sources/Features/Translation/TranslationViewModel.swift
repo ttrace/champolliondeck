@@ -60,6 +60,7 @@ final class TranslationViewModel: ObservableObject {
     private enum AppStateKey {
         static let targetLanguage = "appState.targetLanguage"
         static let experimentMode = "appState.experimentMode"
+        static let recentTargetLanguages = "appState.recentTargetLanguages"
     }
 
     enum StatusNoticeKind: Equatable {
@@ -171,6 +172,7 @@ final class TranslationViewModel: ObservableObject {
     private var tfMenuInputRefreshTask: Task<Void, Never>?
     private var tfMenuPreparationTargetLanguageCode: String?
     private var lastMenuSourceLanguageCode: String?
+    private var recentTargetLanguageCodes: [String]
 
     init(
         orchestrator: TranslationOrchestrator,
@@ -182,6 +184,7 @@ final class TranslationViewModel: ObservableObject {
         self.userDefaults = userDefaults
         self.iOSEnginePolicy = iOSEnginePolicy
         self.preferredLanguages = preferredLanguages
+        self.recentTargetLanguageCodes = userDefaults.stringArray(forKey: AppStateKey.recentTargetLanguages) ?? []
         self.experimentMode = TranslationExperimentMode(
             rawValue: userDefaults.string(forKey: AppStateKey.experimentMode) ?? ""
         ) ?? .segmented
@@ -267,6 +270,7 @@ final class TranslationViewModel: ObservableObject {
             ? AppleIntelligenceLanguageCatalog.supportedLanguageOptions()
             : AppleIntelligenceLanguageCatalog.translationFrameworkLanguageOptions()
         normalizeTargetLanguageSelection()
+        pruneRecentTargetLanguageCodes()
         refreshTFMenuAvailabilityIfNeeded()
     }
 
@@ -312,14 +316,31 @@ final class TranslationViewModel: ObservableObject {
             tfMenuUnsupportedHintMessage = unsupportedPairHintText(for: targetLanguageCode)
         case .supported:
             targetLanguage = targetLanguageCode
+            recordRecentTargetLanguageSelection(targetLanguageCode)
             tfMenuUnsupportedHintMessage = unsupportedPairHintTextIfNeeded()
             #if canImport(Translation)
             requestTFLanguagePackDownload(for: targetLanguageCode)
             #endif
         case .installed, .unknown:
             targetLanguage = targetLanguageCode
+            recordRecentTargetLanguageSelection(targetLanguageCode)
             tfMenuUnsupportedHintMessage = unsupportedPairHintTextIfNeeded()
         }
+    }
+
+    func recentTargetLanguageOptions(limit: Int = 4) -> [TargetLanguageOption] {
+        guard !targetLanguageOptions.isEmpty else { return [] }
+        guard limit > 0 else { return [] }
+
+        let optionByCode = Dictionary(uniqueKeysWithValues: targetLanguageOptions.map { ($0.code, $0) })
+        return recentTargetLanguageCodes
+            .prefix(limit)
+            .compactMap { optionByCode[$0] }
+    }
+
+    func remainingTargetLanguageOptionsExcludingRecent(limit: Int = 4) -> [TargetLanguageOption] {
+        let recentCodes = Set(recentTargetLanguageOptions(limit: limit).map(\.code))
+        return targetLanguageOptions.filter { !recentCodes.contains($0.code) }
     }
 
     func handleSourceTextEdited(previousText: String, currentText: String) {
@@ -490,6 +511,23 @@ final class TranslationViewModel: ObservableObject {
         ) ?? targetLanguageOptions[0].code
     }
 
+    private func recordRecentTargetLanguageSelection(_ code: String) {
+        guard !code.isEmpty else { return }
+        recentTargetLanguageCodes.removeAll { $0 == code }
+        recentTargetLanguageCodes.insert(code, at: 0)
+        if recentTargetLanguageCodes.count > 8 {
+            recentTargetLanguageCodes = Array(recentTargetLanguageCodes.prefix(8))
+        }
+        persistRecentTargetLanguageSelections()
+    }
+
+    private func pruneRecentTargetLanguageCodes() {
+        guard !recentTargetLanguageCodes.isEmpty else { return }
+        let validCodes = Set(targetLanguageOptions.map(\.code))
+        recentTargetLanguageCodes = recentTargetLanguageCodes.filter { validCodes.contains($0) }
+        persistRecentTargetLanguageSelections()
+    }
+
     private func persistTargetLanguageSelection() {
         guard !targetLanguage.isEmpty else { return }
         userDefaults.set(targetLanguage, forKey: AppStateKey.targetLanguage)
@@ -497,6 +535,10 @@ final class TranslationViewModel: ObservableObject {
 
     private func persistExperimentModeSelection() {
         userDefaults.set(experimentMode.rawValue, forKey: AppStateKey.experimentMode)
+    }
+
+    private func persistRecentTargetLanguageSelections() {
+        userDefaults.set(recentTargetLanguageCodes, forKey: AppStateKey.recentTargetLanguages)
     }
 
     private static func preferredDefaultTargetLanguageCode(
